@@ -108,6 +108,7 @@ def extract_with_curve(curves_dir, data):
         new_data["mr"] = np.nan
         new_data["ms"] = np.nan
         new_data["b1std"] = np.nan
+        new_data["rcb"] = np.nan
         new_data["lc_rms"] = np.nan
         new_data["lc_flux_asymmetry"] = np.nan
         new_data["sm_phase_rms"] = np.nan
@@ -172,6 +173,8 @@ def extract_features(data, light_curve):
     mr = magnitude_ratio(magnitudes)
     ms = maximum_slope(times, magnitudes)
     b1std = beyond_1std(magnitudes)
+    rcb = r_cor_bor(magnitudes)
+
     lc_rms = root_mean_square(magnitudes)
     lc_flux_asymmetry = light_curve_flux_asymmetry(magnitudes, lc_rms)
     sm_phase_rms = root_mean_square(sm_phase_magnitudes)
@@ -181,6 +184,7 @@ def extract_features(data, light_curve):
     new_data["mr"] = mr
     new_data["ms"] = ms
     new_data["b1std"] = b1std
+    new_data["rcb"] = rcb
     new_data["lc_rms"] = lc_rms
     new_data["lc_flux_asymmetry"] = lc_flux_asymmetry
     new_data["sm_phase_rms"] = sm_phase_rms
@@ -298,6 +302,25 @@ def beyond_1std(magnitudes):
     gt_1_std = magnitudes[abs(magnitudes - mean) > std].size
 
     return gt_1_std / magnitudes.size
+
+def r_cor_bor(magnitudes):
+    """
+    Returns the percent of points above 1.5 mag over the median magnitude.
+
+    rcb = P(mag > (mag_median + 1.5))
+
+    (D'Isanto et al., 2015) (2.1.12)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+    """
+    median_mag = np.median(magnitudes)
+
+    above_1_5_median = magnitudes[magnitudes > (median_mag + 1.5)]
+
+    return above_1_5_median.size / magnitudes.size
 
 def phase_fold(times, period):
     """
