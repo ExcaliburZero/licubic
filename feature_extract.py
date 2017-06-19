@@ -1,4 +1,3 @@
-from dask import delayed, multiprocessing
 from functools import partial
 from os import path
 from scipy.interpolate import interp1d
@@ -18,7 +17,45 @@ def main():
     curves_dir = sys.argv[2]
     output_file = sys.argv[3]
 
+    result = validate_arguments(data_file, curves_dir, output_file)
+
+    if isinstance(result, str):
+        print(result, file=sys.stderr)
+        sys.exit(1)
+
     main_functionality(data_file, curves_dir, output_file)
+
+def validate_arguments(data_file, curves_dir, output_file):
+    """
+    Checks to see if the given command line arguments are valid. Returns None
+    if they are all valid, or an error string if one or more are invalid.
+
+    Parameters
+    ---------
+    data_file : str
+        The file path of the input data file.
+    curves_dir : str
+        The directory where the light curves are stored.
+    output_file : str
+        The file path of where to write the output data file.
+
+    Returns
+    -------
+    error : Union[None, str]
+        The error message if at least one argument was invalid, otherwise is
+        None.
+    """
+    if not path.exists(data_file):
+        return "The given data file does not exist: %s" % data_file
+    if not path.isfile(data_file):
+        return "The given data file is not a file: %s" % data_file
+
+    if not path.exists(curves_dir):
+        return "The given curve file directory does not exist: %s" % curves_dir
+    if not path.isdir(curves_dir):
+        return "The given curve file directory is not a directory: %s" % curves_dir
+
+    return None
 
 def main_functionality(data_file, curves_dir, output_file):
     """
@@ -28,9 +65,9 @@ def main_functionality(data_file, curves_dir, output_file):
     Parameters
     ---------
     data_file : str
-        The file path of the input data file
+        The file path of the input data file.
     curves_dir : str
-        The directory where the light curves are stored
+        The directory where the light curves are stored.
     output_file : str
         The file path of where to write the output data file.
     """
