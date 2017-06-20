@@ -100,7 +100,7 @@ def extract_with_curve(curves_dir, data):
     if path.exists(curve_path):
         curve = pd.read_csv(curve_path)
 
-        return extract_features(data, curve)
+        return extract_features(data, curve, curves_dir)
     else:
         new_data = data.copy()
 
@@ -109,6 +109,10 @@ def extract_with_curve(curves_dir, data):
         new_data["ms"] = np.nan
         new_data["b1std"] = np.nan
         new_data["rcb"] = np.nan
+        new_data["std"] = np.nan
+        new_data["mad"] = np.nan
+        new_data["mbrp"] = np.nan
+        new_data["pa"] = np.nan
         new_data["lc_rms"] = np.nan
         new_data["lc_flux_asymmetry"] = np.nan
         new_data["sm_phase_rms"] = np.nan
@@ -133,14 +137,15 @@ def get_curve_path(curves_dir, star_id):
     curve_path : str
         The file path of the curve file for the given star.
     """
-    curve_file = "%s.txt" % star_id
+    curve_file = "%s.csv" % star_id
     curve_path = path.join(curves_dir, curve_file)
 
     return curve_path
 
-def extract_features(data, light_curve):
+def extract_features(data, light_curve, curves_dir):
     """
-    Extracts the features from the given light curve and existing data.
+    Extracts the features from the given light curve and existing data. Also
+    saves the generated smoothed and phase shifted curves.
 
     Expects the data to have "Numerical_ID", "V_(mag)", "Period_(days)", and
     "Amplitude".
@@ -153,6 +158,8 @@ def extract_features(data, light_curve):
         The exisiting data on the given star.
     light_curve : pandas.core.frame.DataFrame
         The light curve of the given star.
+    curves_dir : str
+        The directory that the curve files are stored in.
 
     Returns
     -------
@@ -160,6 +167,7 @@ def extract_features(data, light_curve):
         The existing and extracted information on the given star.
     """
     new_data = data.copy()
+    star_id = data["Numerical_ID"]
     period = data["Period_(days)"]
 
     times = light_curve.as_matrix(["MJD"])
@@ -174,6 +182,10 @@ def extract_features(data, light_curve):
     ms = maximum_slope(times, magnitudes)
     b1std = beyond_1std(magnitudes)
     rcb = r_cor_bor(magnitudes)
+    std = np.std(magnitudes)
+    mad = median_absolute_deviation(magnitudes)
+    mbrp = median_buffer_range_percentage(magnitudes)
+    pa = percent_amplitude(magnitudes)
 
     lc_rms = root_mean_square(magnitudes)
     lc_flux_asymmetry = light_curve_flux_asymmetry(magnitudes, lc_rms)
@@ -185,12 +197,26 @@ def extract_features(data, light_curve):
     new_data["ms"] = ms
     new_data["b1std"] = b1std
     new_data["rcb"] = rcb
+    new_data["std"] = std
+    new_data["mad"] = mad
+    new_data["mbrp"] = mbrp
+    new_data["pa"] = pa
     new_data["lc_rms"] = lc_rms
     new_data["lc_flux_asymmetry"] = lc_flux_asymmetry
     new_data["sm_phase_rms"] = sm_phase_rms
     new_data["periodicity"] = periodicity
 
+    save_curve(curves_dir, star_id, "phase", phase_times[:,0], magnitudes[:,0], ["phase", "Mag"])
+    save_curve(curves_dir, star_id, "sm_phase", sm_phase_times, sm_phase_magnitudes, ["phase", "Mag"])
+
     return new_data
+
+def save_curve(curves_dir, star_id, curve_name, times, magnitudes, columns):
+    curve = pd.DataFrame(list(zip(times, magnitudes)), columns=columns)
+
+    curve_path = get_curve_path(curves_dir, "%d_%s" % (star_id, curve_name))
+
+    curve.to_csv(curve_path, index=False)
 
 def linear_trend(times, magnitudes):
     """
@@ -322,6 +348,85 @@ def r_cor_bor(magnitudes):
 
     return above_1_5_median.size / magnitudes.size
 
+def median_absolute_deviation(magnitudes):
+    """
+    Returns the median absolute deviation from the mean magnitude.
+
+    mad = median_i(|x_i - median_j(x_j)|)
+
+    (D'Isanto et al., 2015) (2.1.5)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    med_abs_deviation : numpy.float64
+        The median absolute deviation of the magnitudes.
+    """
+    median = np.median(magnitudes)
+    deviations = magnitudes - median
+    absolute_deviations = [abs(d) for d in deviations]
+
+    return np.median(absolute_deviations)
+
+def median_buffer_range_percentage(magnitudes):
+    """
+    Returns the percent of magnitudes whose deviation from the median is less
+    than 10% of the median.
+
+    mbrp = P(|x_i - median_j(x_j)| < 0.1 * median_j(x_j))
+
+    (D'Isanto et al., 2015) (2.1.6)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    med_buf_rng_per : numpy.float64
+        The median buffer range percentage of the magnitudes.
+    """
+    median = np.median(magnitudes)
+
+    deviations = magnitudes - median
+    absolute_deviations = np.array([abs(d) for d in deviations])
+
+    p_10_median = 0.1 * median
+    within_p_10_median = absolute_deviations[absolute_deviations < p_10_median]
+
+    return within_p_10_median.size / magnitudes.size
+
+def percent_amplitude(magnitudes):
+    """
+    Returns the greater of the differences between the max and median magnitude
+    and the min and median magnitude.
+
+    pa = max(|x_max - median(x)|, |x_min - median(x)|)
+
+    (D'Isanto et al., 2015) (2.1.9)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    per_amplitude : numpy.float64
+        The percent amplitude of the magnitudes.
+    """
+    median = np.median(magnitudes)
+
+    max_diff = np.max(magnitudes) - median
+    min_diff = np.min(magnitudes) - median
+
+    return max(max_diff, min_diff)
+
 def phase_fold(times, period):
     """
     Folds the given light curve over its period to express the curve in terms
@@ -339,7 +444,7 @@ def phase_fold(times, period):
     phase_times : numpy.ndarray
         The light curve times in terms of phase.
     """
-    phase_times = times % period
+    phase_times = (times % period) / period
 
     return phase_times
 
