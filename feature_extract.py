@@ -117,6 +117,7 @@ def extract_with_curve(curves_dir, data):
         new_data["lc_flux_asymmetry"] = np.nan
         new_data["sm_phase_rms"] = np.nan
         new_data["periodicity"] = np.nan
+        new_data["crosses"] = np.nan
 
         return new_data
 
@@ -192,6 +193,8 @@ def extract_features(data, light_curve, curves_dir):
     sm_phase_rms = root_mean_square(sm_phase_magnitudes)
     periodicity = periodicity_metric(lc_rms, sm_phase_rms)
 
+    crosses = mean_crosses(sm_phase_magnitudes)
+
     new_data["lt"] = lt
     new_data["mr"] = mr
     new_data["ms"] = ms
@@ -205,6 +208,7 @@ def extract_features(data, light_curve, curves_dir):
     new_data["lc_flux_asymmetry"] = lc_flux_asymmetry
     new_data["sm_phase_rms"] = sm_phase_rms
     new_data["periodicity"] = periodicity
+    new_data["crosses"] = crosses
 
     save_curve(curves_dir, star_id, "phase", phase_times[:,0], magnitudes[:,0], ["phase", "Mag"])
     save_curve(curves_dir, star_id, "sm_phase", sm_phase_times, sm_phase_magnitudes, ["phase", "Mag"])
@@ -557,6 +561,41 @@ def root_mean_square(xs):
 
     rms = math.sqrt((len(xs) ** -1) * sum_squares)
     return rms
+
+def mean_crosses(magnitudes):
+    """
+    Returns the number of times that the magnitudes cross over the mean with a
+    threshold of 0.1 times the standard deviation.
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    crosses : int
+        The number of times that the magnitudes cross over the mean.
+    """
+    mean = np.mean(magnitudes)
+    std = np.std(magnitudes)
+    dev_above = mean + std * 0.1
+    dev_below = mean - std * 0.1
+
+    above = magnitudes[0] > mean
+
+    crosses = 0
+    for mag in magnitudes:
+        if above:
+            if mag < dev_below:
+                above = False
+                crosses += 1
+        else:
+            if mag > dev_above:
+                above = True
+                crosses += 1
+
+    return crosses
 
 if __name__ == "__main__":
     main()
