@@ -73,6 +73,13 @@ def main_functionality(data_file, curves_dir, output_file):
     """
     data = pd.read_csv(data_file)
 
+    columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
+        ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
+        ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
+        ,  "crosses"
+        ]
+    data = pd.concat([data, pd.DataFrame(columns=columns)])
+
     extract_func = partial(extract_with_curve, curves_dir)
     new_data = data.apply(extract_func, axis=1)
 
@@ -94,7 +101,7 @@ def extract_with_curve(curves_dir, data):
     new_data : pandas.core.frame.DataFrame
         The existing and extracted information on the given star.
     """
-    star_id = data["Numerical_ID"]
+    star_id = int(data["Numerical_ID"])
     curve_path = get_curve_path(curves_dir, star_id)
 
     if path.exists(curve_path):
@@ -109,7 +116,10 @@ def extract_with_curve(curves_dir, data):
                 ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
                 ,  "crosses"
                 ]
-        new_data = pd.concat([new_data, pd.DataFrame(columns=columns)])
+
+        nans = np.empty(len(columns))
+        nans.fill(np.nan)
+        new_data[columns] = nans
 
         return new_data
 
@@ -166,7 +176,6 @@ def extract_features(data, light_curve, curves_dir):
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
         ,  "crosses"
         ]
-    new_data = pd.concat([new_data, pd.DataFrame(columns=columns)])
 
     star_id = data["Numerical_ID"]
     period = data["Period_(days)"]
