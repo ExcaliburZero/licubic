@@ -104,20 +104,12 @@ def extract_with_curve(curves_dir, data):
     else:
         new_data = data.copy()
 
-        new_data["lt"] = np.nan
-        new_data["mr"] = np.nan
-        new_data["ms"] = np.nan
-        new_data["b1std"] = np.nan
-        new_data["rcb"] = np.nan
-        new_data["std"] = np.nan
-        new_data["mad"] = np.nan
-        new_data["mbrp"] = np.nan
-        new_data["pa"] = np.nan
-        new_data["lc_rms"] = np.nan
-        new_data["lc_flux_asymmetry"] = np.nan
-        new_data["sm_phase_rms"] = np.nan
-        new_data["periodicity"] = np.nan
-        new_data["crosses"] = np.nan
+        columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
+                ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
+                ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
+                ,  "crosses"
+                ]
+        new_data = pd.concat([new_data, pd.DataFrame(columns=columns)])
 
         return new_data
 
@@ -168,6 +160,14 @@ def extract_features(data, light_curve, curves_dir):
         The existing and extracted information on the given star.
     """
     new_data = data.copy()
+
+    columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
+        ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
+        ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
+        ,  "crosses"
+        ]
+    new_data = pd.concat([new_data, pd.DataFrame(columns=columns)])
+
     star_id = data["Numerical_ID"]
     period = data["Period_(days)"]
 
@@ -188,6 +188,10 @@ def extract_features(data, light_curve, curves_dir):
     mbrp = median_buffer_range_percentage(magnitudes)
     pa = percent_amplitude(magnitudes)
 
+    totvar = total_variation(sm_phase_magnitudes)
+    quadvar = total_variation(sm_phase_magnitudes)
+    fslope = maximum_slope(sm_phase_times, sm_phase_magnitudes)
+
     lc_rms = root_mean_square(magnitudes)
     lc_flux_asymmetry = light_curve_flux_asymmetry(magnitudes, lc_rms)
     sm_phase_rms = root_mean_square(sm_phase_magnitudes)
@@ -195,28 +199,19 @@ def extract_features(data, light_curve, curves_dir):
 
     crosses = mean_crosses(sm_phase_magnitudes)
 
-    new_data["lt"] = lt
-    new_data["mr"] = mr
-    new_data["ms"] = ms
-    new_data["b1std"] = b1std
-    new_data["rcb"] = rcb
-    new_data["std"] = std
-    new_data["mad"] = mad
-    new_data["mbrp"] = mbrp
-    new_data["pa"] = pa
-    new_data["lc_rms"] = lc_rms
-    new_data["lc_flux_asymmetry"] = lc_flux_asymmetry
-    new_data["sm_phase_rms"] = sm_phase_rms
-    new_data["periodicity"] = periodicity
-    new_data["crosses"] = crosses
+    new_data[columns] = [lt, mr, ms, b1std, rcb, std, mad, mbrp
+        ,  pa, totvar, quadvar, fslope, lc_rms
+        ,  lc_flux_asymmetry, sm_phase_rms, periodicity
+        ,  crosses
+        ]
 
-    save_curve(curves_dir, star_id, "phase", phase_times[:,0], magnitudes[:,0], ["phase", "Mag"])
+    save_curve(curves_dir, star_id, "phase", phase_times, magnitudes, ["phase", "Mag"])
     save_curve(curves_dir, star_id, "sm_phase", sm_phase_times, sm_phase_magnitudes, ["phase", "Mag"])
 
     return new_data
 
 def save_curve(curves_dir, star_id, curve_name, times, magnitudes, columns):
-    curve = pd.DataFrame(list(zip(times, magnitudes)), columns=columns)
+    curve = pd.DataFrame(list(zip(times[:,0], magnitudes[:,0])), columns=columns)
 
     curve_path = get_curve_path(curves_dir, "%d_%s" % (star_id, curve_name))
 
@@ -295,15 +290,12 @@ def maximum_slope(times, magnitudes):
     """
     max_slope = None
 
-    for i in range(len(times) - 1):
-        mag_diff = magnitudes[i + 1][0] - magnitudes[i][0]
-        time_diff = times[i + 1][0] - times[i][0]
+    mag_diffs = magnitudes[1:] - magnitudes[0:-1]
+    time_diffs = times[1:] - times[0:-1]
 
-        if time_diff != 0:
-            slope = mag_diff / time_diff
+    slopes = np.divide(mag_diffs, time_diffs)
 
-            if max_slope is None or slope > max_slope:
-                max_slope = slope
+    max_slope = np.max(slopes[slopes != float("+inf")])
 
     return max_slope
 
@@ -372,7 +364,7 @@ def median_absolute_deviation(magnitudes):
     """
     median = np.median(magnitudes)
     deviations = magnitudes - median
-    absolute_deviations = [abs(d) for d in deviations]
+    absolute_deviations = np.absolute(deviations)
 
     return np.median(absolute_deviations)
 
@@ -398,7 +390,7 @@ def median_buffer_range_percentage(magnitudes):
     median = np.median(magnitudes)
 
     deviations = magnitudes - median
-    absolute_deviations = np.array([abs(d) for d in deviations])
+    absolute_deviations = np.absolute(deviations)
 
     p_10_median = 0.1 * median
     within_p_10_median = absolute_deviations[absolute_deviations < p_10_median]
@@ -430,6 +422,64 @@ def percent_amplitude(magnitudes):
     min_diff = np.min(magnitudes) - median
 
     return max(max_diff, min_diff)
+
+def total_variation(magnitudes):
+    """
+    Returns the average of absolute differences between neighboring magnitudes.
+
+    This measure is meant to be used only on evenly sampled curves.
+
+    sum_j(|mag_j+1 - mag_j|) / m
+
+    (Faraway et al., 2014)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    totvar : numpy.float64
+        The total variation.
+    """
+    m = magnitudes.size
+
+    mags_m_plus_1 = magnitudes[1:]
+    mags_m = magnitudes[0:-1]
+
+    abs_diffs = np.absolute(mags_m_plus_1 - mags_m)
+
+    return np.sum(abs_diffs) / m
+
+def quadratic_variation(magnitudes):
+    """
+    Returns the average of squared differences between neighboring magnitudes.
+
+    This measure is meant to be used only on evenly sampled curves.
+
+    sum_j((mag_j+1 - mag_j) ^ 2) / m
+
+    (Faraway et al., 2014)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    quadvar : numpy.float64
+        The quadratic variation.
+    """
+    m = magnitudes.size
+
+    mags_m_plus_1 = magnitudes[1:]
+    mags_m = magnitudes[0:-1]
+
+    sq_diffs = np.square(mags_m_plus_1 - mags_m)
+
+    return np.sum(sq_diffs) / m
 
 def phase_fold(times, period):
     """
@@ -480,6 +530,9 @@ def smooth_curve(times, magnitudes):
     itp = interp1d(x,y, kind='linear')
     window_size, poly_order = 101, 3
     smoothed_magnitudes = savgol_filter(itp(smoothed_times), window_size, poly_order)
+
+    smoothed_times = smoothed_times.reshape(smoothed_times.size ,1)
+    smoothed_magnitudes = smoothed_magnitudes.reshape(smoothed_magnitudes.size ,1)
 
     return (smoothed_times, smoothed_magnitudes)
 
@@ -584,16 +637,18 @@ def mean_crosses(magnitudes):
 
     above = magnitudes[0] > mean
 
-    crosses = 0
-    for mag in magnitudes:
-        if above:
-            if mag < dev_below:
-                above = False
-                crosses += 1
-        else:
-            if mag > dev_above:
-                above = True
-                crosses += 1
+    mags = magnitudes[:,0]
+
+    relevant_mags = mags[np.where( (mags > dev_above) | (mags < dev_below) )]
+
+    relevant_norm_mags = relevant_mags - mean
+
+    rel_mags_a = relevant_norm_mags[0:-1]
+    rel_mags_b = relevant_norm_mags[1:]
+
+    are_crosses = np.multiply(rel_mags_a, rel_mags_b)
+
+    crosses = are_crosses[are_crosses < 0.0].size
 
     return crosses
 
