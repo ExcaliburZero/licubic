@@ -4,120 +4,25 @@ from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 from sklearn import linear_model
 
-import argparse
 import math
 import numpy as np
 import pandas as pd
-import sys
 
-def main():
-    """
-    $ python3 feature_extract.py CatalinaVars.csv curves/ test.csv
-    """
-    arg_parser = create_arg_parser()
-    args = arg_parser.parse_args()
-
-    result = validate_arguments(args)
-
-    if isinstance(result, str):
-        print(result, file=sys.stderr)
-        sys.exit(1)
-
-    main_functionality(
-            args.data_file,
-            args.curves_dir,
-            args.output_file,
-            nrows=args.nrows,
-            save_curve_files=args.save_curve_files
-        )
-
-def create_arg_parser():
-    """
-    Creates and returns the command line arguments parser for the script.
-
-    Returns
-    -------
-    arg_parser : argparse.ArgumentParser
-        The command line argument parser for the script.
-    """
-    parser = argparse.ArgumentParser(description="Extract features from CRTS light curve data.")
-
-    # Required arguments
-    parser.add_argument("data_file", type=str,
-            help="the input data file")
-    parser.add_argument("curves_dir", type=str,
-            help="the directory where the light curves are stored")
-    parser.add_argument("output_file", type=str,
-            help="the output data file")
-
-    # Optional flags
-    parser.add_argument("--nrows", dest="nrows", type=int, default=None,
-            help="the number of rows of data to process (default: all)")
-    parser.add_argument("--save-curves", dest="save_curve_files", action="store_const",
-            const=True, default=False,
-            help="save the intermediate light curves")
-
-    return parser
-
-def validate_arguments(args):
-    """
-    Checks to see if the given command line arguments are valid. Returns None
-    if they are all valid, or an error string if one or more are invalid.
-
-    Parameters
-    ---------
-    args : argparse.Namespace
-        The parsed command line arguments.
-
-    Returns
-    -------
-    error : Union[None, str]
-        The error message if at least one argument was invalid, otherwise is
-        None.
-    """
-    data_file = args.data_file
-    curves_dir = args.curves_dir
-    nrows = args.nrows
-
-    if not path.exists(data_file):
-        return "The given data file does not exist: %s" % data_file
-    if not path.isfile(data_file):
-        return "The given data file is not a file: %s" % data_file
-
-    if not path.exists(curves_dir):
-        return "The given curve file directory does not exist: %s" % curves_dir
-    if not path.isdir(curves_dir):
-        return "The given curve file directory is not a directory: %s" % curves_dir
-
-    if nrows is not None:
-        if nrows < 0:
-            return "The given nrows is not a non-negative integer: %s" % nrows
-
-    return None
-
-def main_functionality(data_file, curves_dir, output_file, nrows=None,
-        save_curve_files=False):
+def process_data(data, curves_dir, save_curve_files=False):
     """
     Extracts additional features from the stars in the given data file using
     their light curves and existing features.
 
     Parameters
     ---------
-    data_file : str
-        The file path of the input data file.
+    data : pandas.core.frame.DataFrame
+        The exisiting data on the given star.
     curves_dir : str
         The directory where the light curves are stored.
-    output_file : str
-        The file path of where to write the output data file.
-    nrows : Union[int, None]
-        The number of rows to process from the data file. If None, then
-        processes all of the rows.
     save_curve_files : bool
         If True, then the intermediate light curves are saved to the
         curves_dir.
     """
-    data = pd.read_csv(data_file, nrows=nrows)
-
     columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
@@ -129,7 +34,7 @@ def main_functionality(data_file, curves_dir, output_file, nrows=None,
     extract_func = partial(extract_with_curve, curves_dir, save_curve_files)
     new_data = data.apply(extract_func, axis=1)
 
-    new_data.to_csv(output_file, index=False)
+    return new_data
 
 def extract_with_curve(curves_dir, save_curve_files, data):
     """
@@ -798,6 +703,3 @@ def above_below_1std_slopes(slopes):
     below = slopes[slopes < mean - std].size
 
     return above / slopes.size, below / slopes.size
-
-if __name__ == "__main__":
-    main()
