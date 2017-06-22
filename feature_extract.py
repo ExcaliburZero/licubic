@@ -154,7 +154,7 @@ def extract_with_curve(curves_dir, save_curve_files, data):
     curve_path = get_curve_path(curves_dir, star_id)
 
     if path.exists(curve_path):
-        curve = pd.read_csv(curve_path)
+        curve = get_curve(curve_path)
 
         return extract_features(data, curve, curves_dir, save_curve_files)
     else:
@@ -181,6 +181,22 @@ def get_curve_path(curves_dir, star_id):
     curve_path = path.join(curves_dir, curve_file)
 
     return curve_path
+
+def get_curve(curve_path):
+    """
+    Gets the light curve from the file at the specified curve_path.
+
+    This function exists on its own in order to make the script easier to
+    profile, so that the time it takes to load the light curves is specifically
+    measured.
+
+    Parameters
+    ----------
+    curve_path : str
+        The file path of the curve file for the given star.
+
+    """
+    return pd.read_csv(curve_path)
 
 def extract_features(data, light_curve, curves_dir, save_curve_files):
     """
@@ -379,7 +395,8 @@ def beyond_1std(magnitudes):
     std = np.std(magnitudes)
     mean = np.mean(magnitudes)
 
-    gt_1_std = magnitudes[abs(magnitudes - mean) > std].size
+    abs_deviations = np.absolute(magnitudes - mean)
+    gt_1_std = abs_deviations[abs_deviations > std].size
 
     return gt_1_std / magnitudes.size
 
