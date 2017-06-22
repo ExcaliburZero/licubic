@@ -4,6 +4,7 @@ from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 from sklearn import linear_model
 
+import argparse
 import math
 import numpy as np
 import pandas as pd
@@ -13,31 +14,60 @@ def main():
     """
     $ python3 feature_extract.py CatalinaVars.csv curves/ test.csv
     """
-    data_file = sys.argv[1]
-    curves_dir = sys.argv[2]
-    output_file = sys.argv[3]
+    arg_parser = create_arg_parser()
+    args = arg_parser.parse_args()
 
-    result = validate_arguments(data_file, curves_dir, output_file)
+    result = validate_arguments(args)
 
     if isinstance(result, str):
         print(result, file=sys.stderr)
         sys.exit(1)
 
-    main_functionality(data_file, curves_dir, output_file)
+    main_functionality(
+            args.data_file,
+            args.curves_dir,
+            args.output_file,
+            nrows=args.nrows,
+            save_curve_files=args.save_curve_files
+        )
 
-def validate_arguments(data_file, curves_dir, output_file):
+def create_arg_parser():
+    """
+    Creates and returns the command line arguments parser for the script.
+
+    Returns
+    -------
+    arg_parser : argparse.ArgumentParser
+        The command line argument parser for the script.
+    """
+    parser = argparse.ArgumentParser(description="Extract features from CRTS light curve data.")
+
+    # Required arguments
+    parser.add_argument("data_file", type=str,
+            help="the input data file")
+    parser.add_argument("curves_dir", type=str,
+            help="the directory where the light curves are stored")
+    parser.add_argument("output_file", type=str,
+            help="the output data file")
+
+    # Optional flags
+    parser.add_argument("--nrows", dest="nrows", type=int, default=None,
+            help="the number of rows of data to process (default: all)")
+    parser.add_argument("--save-curves", dest="save_curve_files", action="store_const",
+            const=True, default=False,
+            help="save the intermediate light curves")
+
+    return parser
+
+def validate_arguments(args):
     """
     Checks to see if the given command line arguments are valid. Returns None
     if they are all valid, or an error string if one or more are invalid.
 
     Parameters
     ---------
-    data_file : str
-        The file path of the input data file.
-    curves_dir : str
-        The directory where the light curves are stored.
-    output_file : str
-        The file path of where to write the output data file.
+    args : argparse.Namespace
+        The parsed command line arguments.
 
     Returns
     -------
@@ -45,6 +75,10 @@ def validate_arguments(data_file, curves_dir, output_file):
         The error message if at least one argument was invalid, otherwise is
         None.
     """
+    data_file = args.data_file
+    curves_dir = args.curves_dir
+    nrows = args.nrows
+
     if not path.exists(data_file):
         return "The given data file does not exist: %s" % data_file
     if not path.isfile(data_file):
@@ -55,9 +89,14 @@ def validate_arguments(data_file, curves_dir, output_file):
     if not path.isdir(curves_dir):
         return "The given curve file directory is not a directory: %s" % curves_dir
 
+    if nrows is not None:
+        if nrows < 0:
+            return "The given nrows is not a non-negative integer: %s" % nrows
+
     return None
 
-def main_functionality(data_file, curves_dir, output_file):
+def main_functionality(data_file, curves_dir, output_file, nrows=None,
+        save_curve_files=False):
     """
     Extracts additional features from the stars in the given data file using
     their light curves and existing features.
@@ -70,8 +109,14 @@ def main_functionality(data_file, curves_dir, output_file):
         The directory where the light curves are stored.
     output_file : str
         The file path of where to write the output data file.
+    nrows : Union[int, None]
+        The number of rows to process from the data file. If None, then
+        processes all of the rows.
+    save_curve_files : bool
+        If True, then the intermediate light curves are saved to the
+        curves_dir.
     """
-    data = pd.read_csv(data_file)
+    data = pd.read_csv(data_file, nrows=nrows)
 
     columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
@@ -81,12 +126,12 @@ def main_functionality(data_file, curves_dir, output_file):
         ]
     data = pd.concat([data, pd.DataFrame(columns=columns)])
 
-    extract_func = partial(extract_with_curve, curves_dir)
+    extract_func = partial(extract_with_curve, curves_dir, save_curve_files)
     new_data = data.apply(extract_func, axis=1)
 
     new_data.to_csv(output_file, index=False)
 
-def extract_with_curve(curves_dir, data):
+def extract_with_curve(curves_dir, save_curve_files, data):
     """
     Extracts the features from the given star's data with its light curve.
 
@@ -94,6 +139,9 @@ def extract_with_curve(curves_dir, data):
     ----------
     curves_dir : str
         The directory that the curve files are stored in.
+    save_curve_files : bool
+        If True, then the intermediate light curves are saved to the
+        curves_dir.
     data : pandas.core.frame.DataFrame
         The exisiting data on the given star.
 
@@ -108,22 +156,9 @@ def extract_with_curve(curves_dir, data):
     if path.exists(curve_path):
         curve = pd.read_csv(curve_path)
 
-        return extract_features(data, curve, curves_dir)
+        return extract_features(data, curve, curves_dir, save_curve_files)
     else:
-        new_data = data.copy()
-
-        columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
-                ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
-                ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
-                ,  "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
-                ,  "bel_1std_slopes"
-                ]
-
-        nans = np.empty(len(columns))
-        nans.fill(np.nan)
-        new_data[columns] = nans
-
-        return new_data
+        return data
 
 def get_curve_path(curves_dir, star_id):
     """
@@ -147,7 +182,7 @@ def get_curve_path(curves_dir, star_id):
 
     return curve_path
 
-def extract_features(data, light_curve, curves_dir):
+def extract_features(data, light_curve, curves_dir, save_curve_files):
     """
     Extracts the features from the given light curve and existing data. Also
     saves the generated smoothed and phase shifted curves.
@@ -165,6 +200,9 @@ def extract_features(data, light_curve, curves_dir):
         The light curve of the given star.
     curves_dir : str
         The directory that the curve files are stored in.
+    save_curve_files : bool
+        If True, then the intermediate light curves are saved to the
+        curves_dir.
 
     Returns
     -------
@@ -223,8 +261,9 @@ def extract_features(data, light_curve, curves_dir):
         ,  crosses, abv_1std, bel_1std, abv_1std_slopes, bel_1std_slopes
         ]
 
-    save_curve(curves_dir, star_id, "phase", phase_times, magnitudes, ["phase", "Mag"])
-    save_curve(curves_dir, star_id, "sm_phase", sm_phase_times, sm_phase_magnitudes, ["phase", "Mag"])
+    if save_curve_files:
+        save_curve(curves_dir, star_id, "phase", phase_times, magnitudes, ["phase", "Mag"])
+        save_curve(curves_dir, star_id, "sm_phase", sm_phase_times, sm_phase_magnitudes, ["phase", "Mag"])
 
     return new_data
 
