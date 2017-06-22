@@ -76,7 +76,8 @@ def main_functionality(data_file, curves_dir, output_file):
     columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
-        ,  "crosses"
+        ,  "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
+        ,  "bel_1std_slopes"
         ]
     data = pd.concat([data, pd.DataFrame(columns=columns)])
 
@@ -114,7 +115,8 @@ def extract_with_curve(curves_dir, data):
         columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
                 ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
                 ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
-                ,  "crosses"
+                ,  "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
+                ,  "bel_1std_slopes"
                 ]
 
         nans = np.empty(len(columns))
@@ -174,7 +176,8 @@ def extract_features(data, light_curve, curves_dir):
     columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
-        ,  "crosses"
+        ,  "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
+        ,  "bel_1std_slopes"
         ]
 
     star_id = data["Numerical_ID"]
@@ -186,6 +189,8 @@ def extract_features(data, light_curve, curves_dir):
     phase_times = phase_fold(times, period)
 
     sm_phase_times, sm_phase_magnitudes = smooth_curve(phase_times, magnitudes)
+
+    sm_phase_slopes = curve_slopes(sm_phase_times, sm_phase_magnitudes)
 
     lt = linear_trend(times, magnitudes)
     mr = magnitude_ratio(magnitudes)
@@ -207,11 +212,15 @@ def extract_features(data, light_curve, curves_dir):
     periodicity = periodicity_metric(lc_rms, sm_phase_rms)
 
     crosses = mean_crosses(sm_phase_magnitudes)
+    abv_1std = above_1std(sm_phase_magnitudes)
+    bel_1std = beyond_1std(sm_phase_magnitudes) - abv_1std
+
+    abv_1std_slopes, bel_1std_slopes = above_below_1std_slopes(sm_phase_slopes)
 
     new_data[columns] = [lt, mr, ms, b1std, rcb, std, mad, mbrp
         ,  pa, totvar, quadvar, fslope, lc_rms
         ,  lc_flux_asymmetry, sm_phase_rms, periodicity
-        ,  crosses
+        ,  crosses, abv_1std, bel_1std, abv_1std_slopes, bel_1std_slopes
         ]
 
     save_curve(curves_dir, star_id, "phase", phase_times, magnitudes, ["phase", "Mag"])
@@ -311,7 +320,8 @@ def maximum_slope(times, magnitudes):
 def beyond_1std(magnitudes):
     """
     Returns the percent of points in the light curve with a magnitude greater
-    than one standard deviation. Values range from 0.0 to 1.0.
+    than one standard deviation away from the mean. Values range from 0.0 to
+    1.0.
 
     bstd1 = P(|mag - mean_mag| > std)
 
@@ -325,7 +335,7 @@ def beyond_1std(magnitudes):
     Returns
     -------
     b1std : numpy.float64
-        The percent of magnitudes above 1 standard deviation.
+        The percent of magnitudes more than 1 standard deviation from the mean.
     """
     std = np.std(magnitudes)
     mean = np.mean(magnitudes)
@@ -660,6 +670,78 @@ def mean_crosses(magnitudes):
     crosses = are_crosses[are_crosses < 0.0].size
 
     return crosses
+
+def above_1std(magnitudes):
+    """
+    Returns the percent of points in the light curve with a magnitude greater
+    than one standard deviation. Values range from 0.0 to 1.0.
+
+    above_std1 = P(mag - mean_mag > std)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    above_1std : numpy.float64
+        The percent of magnitudes above 1 standard deviation from the mean.
+    """
+    std = np.std(magnitudes)
+    mean = np.mean(magnitudes)
+
+    gt_1_std = magnitudes[magnitudes - mean > std].size
+
+    return gt_1_std / magnitudes.size
+
+def curve_slopes(times, magnitudes):
+    """
+    Returns the slopes between the given (time, magnitude) points.
+
+    Parameters
+    ----------
+    times : numpy.ndarray
+        The light curve times.
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    slopes : numpy.float64
+        The slopes between the given points.
+    """
+    mag_diffs = magnitudes[1:] - magnitudes[0:-1]
+    time_diffs = times[1:] - times[0:-1]
+
+    slopes = np.divide(mag_diffs, time_diffs)
+
+    return slopes
+
+def above_below_1std_slopes(slopes):
+    """
+    Returns the percent of the slopes that are above and below, respecitvely,
+    the mean slope by at least one standard deviation.
+
+    Parameters
+    ----------
+    slopes : numpy.ndarray
+        The slopes between the points in the light curve.
+
+    Returns
+    -------
+    abv_1std_slopes : numpy.float64
+        The percent of slopes above 1 standard deviation above the mean slope.
+    bel_1std_slopes : numpy.float64
+        The percent of slopes above 1 standard deviation below the mean slope.
+    """
+    mean = np.mean(slopes)
+    std = np.std(slopes)
+
+    above = slopes[slopes > mean + std].size
+    below = slopes[slopes < mean - std].size
+
+    return above / slopes.size, below / slopes.size
 
 if __name__ == "__main__":
     main()
