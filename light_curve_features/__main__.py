@@ -27,7 +27,7 @@ def main():
             save_curve_files=args.save_curve_files
         )
 
-    new_data.to_csv(output_file, index=False)
+    new_data.to_csv(args.output_file, index=False)
 
 def create_arg_parser():
     """

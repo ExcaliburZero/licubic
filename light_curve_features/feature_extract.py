@@ -561,17 +561,22 @@ def light_curve_flux_asymmetry(magnitudes, light_curve_rms):
     lc_flux_asymmetry : numpy.float64
         The light curve flux asymmetry of the light curve.
     """
-    d_med = np.median(magnitudes)
+    median = np.median(magnitudes)
 
-    data_len = len(magnitudes)
-    index_10p = int(round(data_len * 0.1))
-    top_10 = data_len - index_10p - 1
-    bottom_10 = index_10p
-    d_10p = magnitudes[top_10:-1] + magnitudes[0:bottom_10]
+    sorted_magnitudes = np.sort(magnitudes)
 
-    mean_d_10p = np.mean(d_10p)
+    p_10 = int(magnitudes.size / 10)
+    p_10_high = magnitudes.size - p_10
+    p_10_low = p_10
 
-    return (mean_d_10p - d_med) / light_curve_rms
+    top_10_p = sorted_magnitudes[p_10_high:]
+    bottom_10_p = sorted_magnitudes[:p_10_low]
+
+    top_bottom_10_p = np.concatenate([top_10_p, bottom_10_p])
+
+    mean_top_bottom = np.mean(top_bottom_10_p)
+
+    return (mean_top_bottom - median) / light_curve_rms
 
 def root_mean_square(xs):
     """
