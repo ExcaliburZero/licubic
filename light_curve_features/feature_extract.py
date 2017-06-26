@@ -25,8 +25,8 @@ def process_data(data, curves_dir, save_curve_files=False):
     """
     columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
-        ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
-        ,  "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
+        ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
+        ,  "roms", "ptpv", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
         ,  "bel_1std_slopes"
         ]
     data = pd.concat([data, pd.DataFrame(columns=columns)])
@@ -91,17 +91,24 @@ def get_curve(curve_path):
     """
     Gets the light curve from the file at the specified curve_path.
 
-    This function exists on its own in order to make the script easier to
-    profile, so that the time it takes to load the light curves is specifically
-    measured.
+    Uses a custom csv processing method in order to load in data from files
+    faster than `pandas.read_csv`.
 
     Parameters
     ----------
     curve_path : str
         The file path of the curve file for the given star.
 
+    Returns
+    -------
+    light_curve : numpy.ndarray
+        The times, magnitudes, and errors of the light curve.
     """
-    return pd.read_csv(curve_path)
+    with open(curve_path, "r") as f:
+        lines = f.read().split("\n")
+        parts = [line.split(",")[1:4] for line in lines]
+
+        return np.array(parts[1:-1], dtype="float64")
 
 def extract_features(data, light_curve, curves_dir, save_curve_files):
     """
@@ -117,8 +124,8 @@ def extract_features(data, light_curve, curves_dir, save_curve_files):
     ----------
     data : pandas.core.frame.DataFrame
         The exisiting data on the given star.
-    light_curve : pandas.core.frame.DataFrame
-        The light curve of the given star.
+    light_curve : numpy.ndarray
+        The times, magnitudes, and errors of the light curve.
     curves_dir : str
         The directory that the curve files are stored in.
     save_curve_files : bool
@@ -134,16 +141,18 @@ def extract_features(data, light_curve, curves_dir, save_curve_files):
 
     columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
-        ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity"
-        ,  "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
+        ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
+        ,  "roms", "ptpv", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
         ,  "bel_1std_slopes"
         ]
 
     star_id = data["Numerical_ID"]
     period = data["Period_(days)"]
 
-    times = light_curve.as_matrix(["MJD"])
-    magnitudes = light_curve.as_matrix(["Mag"])
+    num_obs = light_curve.shape[0]
+    times = light_curve[:,0].reshape(num_obs, 1)
+    magnitudes = light_curve[:,1].reshape(num_obs, 1)
+    errors = light_curve[:,2].reshape(num_obs, 1)
 
     phase_times = phase_fold(times, period)
 
@@ -170,6 +179,11 @@ def extract_features(data, light_curve, curves_dir, save_curve_files):
     sm_phase_rms = root_mean_square(sm_phase_magnitudes)
     periodicity = periodicity_metric(lc_rms, sm_phase_rms)
 
+    chi_2 = chi_2_test(magnitudes, errors)
+    iqr = interquartile_range(magnitudes)
+    roms = robust_median_statistic(magnitudes, errors)
+    ptpv = peak_to_peak_variability(magnitudes, errors)
+
     crosses = mean_crosses(sm_phase_magnitudes)
     abv_1std = above_1std(sm_phase_magnitudes)
     bel_1std = beyond_1std(sm_phase_magnitudes) - abv_1std
@@ -178,8 +192,9 @@ def extract_features(data, light_curve, curves_dir, save_curve_files):
 
     new_data[columns] = [lt, mr, ms, b1std, rcb, std, mad, mbrp
         ,  pa, totvar, quadvar, fslope, lc_rms
-        ,  lc_flux_asymmetry, sm_phase_rms, periodicity
-        ,  crosses, abv_1std, bel_1std, abv_1std_slopes, bel_1std_slopes
+        ,  lc_flux_asymmetry, sm_phase_rms, periodicity, chi_2, iqr
+        ,  roms, ptpv, crosses, abv_1std, bel_1std, abv_1std_slopes
+        ,  bel_1std_slopes
         ]
 
     if save_curve_files:
@@ -599,6 +614,121 @@ def root_mean_square(xs):
 
     rms = math.sqrt((len(xs) ** -1) * sum_squares)
     return rms
+
+def chi_2_test(magnitudes, errors):
+    """
+    Returns the result of performing a chi^2 test.
+
+    chi^2 = sum((mag - m_bar)^2 / error^2)
+
+    m_bar = sum(mag / error^2) / sum(1 / error^2)
+
+    (Sokolovsky et al., 2016) (1) (2)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+    errors : numpy.ndarray
+        The light curve observation errors.
+
+    Returns
+    -------
+    chi_2 : numpy.float64
+        The result of the chi^2 test.
+    """
+    num_obs = magnitudes.shape[0]
+    errors_sq = np.square(errors)
+
+    m_bar = np.sum(np.divide(magnitudes, errors_sq)) /\
+        np.sum(np.divide(np.ones(num_obs), errors_sq))
+
+    chi_2 = np.sum(np.divide(np.square(magnitudes - m_bar), errors_sq))
+    return chi_2
+
+def interquartile_range(magnitudes):
+    """
+    Returns the interquartile range of the magnitudes.
+
+    https://en.wikipedia.org/wiki/Interquartile_range
+
+    (Sokolovsky et al., 2016)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    iqr : numpy.float64
+        The result of the chi^2 test.
+    """
+    num_obs = magnitudes.shape[0]
+    per_25 = int(num_obs / 4.0)
+
+    q1 = magnitudes[per_25]
+    q3 = magnitudes[num_obs - per_25]
+
+    return (q3 - q1)[0]
+
+def robust_median_statistic(magnitudes, errors):
+    """
+    Returns the robust median statistic for the given light curve.
+
+    roms = sum(abs(mag - median(mags)) / error) / (N - 1)
+
+    (Sokolovsky et al., 2016) (7)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+    errors : numpy.ndarray
+        The light curve observation errors.
+
+    Returns
+    -------
+    roms : numpy.float64
+        The robust median statistic of the magnitudes and errors.
+    """
+    num_obs = magnitudes.shape[0]
+    median = np.median(magnitudes)
+
+    abs_diffs = np.absolute(magnitudes - median)
+    s = np.sum(np.divide(abs_diffs, errors))
+    roms = s / (num_obs - 1)
+
+    return roms
+
+def peak_to_peak_variability(magnitudes, errors):
+    """
+    Returns the peak to peak variability of the given magnitudes and errors.
+
+    v = (max(mag - error) - min(mag + error)) / (max(mag - error) + min(mag + error)))
+
+    (Sokolovsky et al., 2016) (9)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+    errors : numpy.ndarray
+        The light curve observation errors.
+
+    Returns
+    -------
+    ptpv : numpy.float64
+        The peak to peak variability of the magnitudes and errors.
+    """
+    sums = magnitudes + errors
+    differences = magnitudes - errors
+
+    min_sum = np.min(sums)
+    max_diff = np.max(differences)
+
+    ptpv = (max_diff - min_sum) / (max_diff + min_sum)
+    return ptpv
 
 def mean_crosses(magnitudes):
     """
