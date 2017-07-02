@@ -21,13 +21,20 @@ def main():
 
     data = pd.read_csv(args.data_file, nrows=args.nrows)
 
+    fix_star_id_col(data, args.star_id_col)
+
     new_data = feature_extract.process_data(
             data,
+            args.star_id_col,
+            args.period_col,
             args.curves_dir,
             save_curve_files=args.save_curve_files
         )
 
     new_data.to_csv(args.output_file, index=False)
+
+def fix_star_id_col(data, star_id_col):
+    data[star_id_col] = data[star_id_col].astype(str)
 
 def create_arg_parser():
     """
@@ -54,6 +61,12 @@ def create_arg_parser():
     parser.add_argument("--save-curves", dest="save_curve_files", action="store_const",
             const=True, default=False,
             help="save the intermediate light curves")
+    parser.add_argument("--star-id-col", dest="star_id_col", type=str,
+            default="Numerical_ID",
+            help="the name of the column that contains the star id")
+    parser.add_argument("--period-col", dest="period_col", type=str,
+            default="Period_(days)",
+            help="the name of the column that contains the light curve periods")
 
     return parser
 

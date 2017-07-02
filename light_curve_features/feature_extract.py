@@ -1,3 +1,4 @@
+from astropy.stats import LombScargle
 from functools import partial
 from os import path
 from scipy.interpolate import interp1d
@@ -8,7 +9,7 @@ import math
 import numpy as np
 import pandas as pd
 
-def process_data(data, curves_dir, save_curve_files=False):
+def process_data(data, star_id_col, period_col, curves_dir, save_curve_files=False):
     """
     Extracts additional features from the stars in the given data file using
     their light curves and existing features.
@@ -17,6 +18,10 @@ def process_data(data, curves_dir, save_curve_files=False):
     ---------
     data : pandas.core.frame.DataFrame
         The exisiting data on the given star.
+    star_id_col : str
+        The name of the column containing the star id.
+    period_col : str
+        The name of the columns containing the light curve period.
     curves_dir : str
         The directory where the light curves are stored.
     save_curve_files : bool
@@ -31,12 +36,13 @@ def process_data(data, curves_dir, save_curve_files=False):
         ]
     data = pd.concat([data, pd.DataFrame(columns=columns)])
 
-    extract_func = partial(extract_with_curve, curves_dir, save_curve_files)
+    extract_func = partial(extract_with_curve, curves_dir, save_curve_files
+            , star_id_col, period_col)
     new_data = data.apply(extract_func, axis=1)
 
     return new_data
 
-def extract_with_curve(curves_dir, save_curve_files, data):
+def extract_with_curve(curves_dir, save_curve_files, star_id_col, period_col, data):
     """
     Extracts the features from the given star's data with its light curve.
 
@@ -47,6 +53,10 @@ def extract_with_curve(curves_dir, save_curve_files, data):
     save_curve_files : bool
         If True, then the intermediate light curves are saved to the
         curves_dir.
+    star_id_col : str
+        The name of the column containing the star id.
+    period_col : str
+        The name of the columns containing the light curve period.
     data : pandas.core.frame.DataFrame
         The exisiting data on the given star.
 
@@ -55,13 +65,13 @@ def extract_with_curve(curves_dir, save_curve_files, data):
     new_data : pandas.core.frame.DataFrame
         The existing and extracted information on the given star.
     """
-    star_id = int(data["Numerical_ID"])
+    star_id = data[star_id_col]
     curve_path = get_curve_path(curves_dir, star_id)
 
     if path.exists(curve_path):
         curve = get_curve(curve_path)
 
-        return extract_features(data, curve, curves_dir, save_curve_files)
+        return extract_features(data, star_id_col, period_col, curve, curves_dir, save_curve_files)
     else:
         return data
 
@@ -94,6 +104,9 @@ def get_curve(curve_path):
     Uses a custom csv processing method in order to load in data from files
     faster than `pandas.read_csv`.
 
+    Assumes that the data file follows a csv structure where the columns are
+    the time, magnitude, and error in that order.
+
     Parameters
     ----------
     curve_path : str
@@ -106,11 +119,11 @@ def get_curve(curve_path):
     """
     with open(curve_path, "r") as f:
         lines = f.read().split("\n")
-        parts = [line.split(",")[1:4] for line in lines]
+        parts = [line.split(",")[0:4] for line in lines]
 
         return np.array(parts[1:-1], dtype="float64")
 
-def extract_features(data, light_curve, curves_dir, save_curve_files):
+def extract_features(data, star_id_col, period_col, light_curve, curves_dir, save_curve_files):
     """
     Extracts the features from the given light curve and existing data. Also
     saves the generated smoothed and phase shifted curves.
@@ -124,6 +137,10 @@ def extract_features(data, light_curve, curves_dir, save_curve_files):
     ----------
     data : pandas.core.frame.DataFrame
         The exisiting data on the given star.
+    star_id_col : str
+        The name of the column containing the star id.
+    period_col : str
+        The name of the columns containing the light curve period.
     light_curve : numpy.ndarray
         The times, magnitudes, and errors of the light curve.
     curves_dir : str
@@ -146,8 +163,8 @@ def extract_features(data, light_curve, curves_dir, save_curve_files):
         ,  "bel_1std_slopes"
         ]
 
-    star_id = data["Numerical_ID"]
-    period = data["Period_(days)"]
+    star_id = data[star_id_col]
+    period = data[period_col]
 
     num_obs = light_curve.shape[0]
     times = light_curve[:,0].reshape(num_obs, 1)
@@ -159,6 +176,8 @@ def extract_features(data, light_curve, curves_dir, save_curve_files):
     sm_phase_times, sm_phase_magnitudes = smooth_curve(phase_times, magnitudes)
 
     sm_phase_slopes = curve_slopes(sm_phase_times, sm_phase_magnitudes)
+
+    #ls_period = lomb_scargle_periodogram(times, magnitudes, errors)
 
     lt = linear_trend(times, magnitudes)
     mr = magnitude_ratio(magnitudes)
@@ -206,9 +225,18 @@ def extract_features(data, light_curve, curves_dir, save_curve_files):
 def save_curve(curves_dir, star_id, curve_name, times, magnitudes, columns):
     curve = pd.DataFrame(list(zip(times[:,0], magnitudes[:,0])), columns=columns)
 
-    curve_path = get_curve_path(curves_dir, "%d_%s" % (star_id, curve_name))
+    curve_path = get_curve_path(curves_dir, "%s_%s" % (star_id, curve_name))
 
     curve.to_csv(curve_path, index=False)
+
+def lomb_scargle_periodogram(times, magnitudes, errors):
+    ls = LombScargle(times[:,0], magnitudes[:,0], errors[:,0])
+    frequency, power = ls.autopower(nyquist_factor=100)
+
+    best_frequency = frequency[np.argmax(power)]
+    best_period = 1.0 / best_frequency
+
+    return best_period
 
 def linear_trend(times, magnitudes):
     """
