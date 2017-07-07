@@ -2,12 +2,14 @@ from astropy.stats import LombScargle
 from functools import partial
 from os import path
 from scipy.interpolate import interp1d
+from scipy.optimize import leastsq
 from scipy.signal import savgol_filter
 from sklearn import linear_model
 
 import math
 import numpy as np
 import pandas as pd
+import scipy.stats as ss
 
 def process_data(data, star_id_col, period_col, curves_dir, save_curve_files=False):
     """
@@ -31,8 +33,9 @@ def process_data(data, star_id_col, period_col, curves_dir, save_curve_files=Fal
     columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
-        ,  "roms", "ptpv", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
-        ,  "bel_1std_slopes"
+        ,  "roms", "ptpv", "fourier_amplitude", "R_21", "R_31", "f_phase"
+        ,  "phi_21", "phi_31", "skewness", "kurtosis", "crosses",  "abv_1std"
+        ,  "bel_1std", "abv_1std_slopes", "bel_1std_slopes", "num_obs"
         ]
     data = pd.concat([data, pd.DataFrame(columns=columns)])
 
@@ -159,8 +162,9 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
-        ,  "roms", "ptpv", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
-        ,  "bel_1std_slopes"
+        ,  "roms", "ptpv", "fourier_amplitude", "R_21", "R_31", "f_phase"
+        ,  "phi_21", "phi_31", "skewness", "kurtosis", "crosses",  "abv_1std"
+        ,  "bel_1std", "abv_1std_slopes", "bel_1std_slopes", "num_obs"
         ]
 
     star_id = data[star_id_col]
@@ -203,6 +207,18 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     roms = robust_median_statistic(magnitudes, errors)
     ptpv = peak_to_peak_variability(magnitudes, errors)
 
+    fourier_order = 3
+    fourier_coef = fourier_decomposition(phase_times, magnitudes, fourier_order)
+    fourier_amplitude = fourier_R(fourier_coef, 1)
+    R_21 = fourier_R_1(fourier_coef, 2)
+    R_31 = fourier_R_1(fourier_coef, 3)
+    f_phase = fourier_phi(fourier_coef, 1)
+    phi_21 = fourier_phi_1(fourier_coef, 2)
+    phi_31 = fourier_phi_1(fourier_coef, 3)
+
+    skewness = ss.skew(magnitudes)[0]
+    kurtosis = ss.kurtosis(magnitudes)[0]
+
     crosses = mean_crosses(sm_phase_magnitudes)
     abv_1std = above_1std(sm_phase_magnitudes)
     bel_1std = beyond_1std(sm_phase_magnitudes) - abv_1std
@@ -212,8 +228,9 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     new_data[columns] = [lt, mr, ms, b1std, rcb, std, mad, mbrp
         ,  pa, totvar, quadvar, fslope, lc_rms
         ,  lc_flux_asymmetry, sm_phase_rms, periodicity, chi_2, iqr
-        ,  roms, ptpv, crosses, abv_1std, bel_1std, abv_1std_slopes
-        ,  bel_1std_slopes
+        ,  roms, ptpv, fourier_amplitude, R_21, R_31, f_phase, phi_21, phi_31
+        ,  skewness, kurtosis, crosses, abv_1std, bel_1std, abv_1std_slopes
+        ,  bel_1std_slopes, num_obs
         ]
 
     if save_curve_files:
@@ -757,6 +774,193 @@ def peak_to_peak_variability(magnitudes, errors):
 
     ptpv = (max_diff - min_sum) / (max_diff + min_sum)
     return ptpv
+
+def fourier_decomposition(times, magnitudes, order):
+    """
+    Fits the given light curve to a cosine fourier series of the given order
+    and returns the fit amplitude and phi weights. The coefficents are
+    calculated using a least squares fit.
+
+    The fourier series that is fit is the following:
+
+    n = order
+    f(time) = A_0 + sum([A_k * cos(2pi * k * time + phi_k) for k in range(1, n + 1)])
+
+    The fourier coeeficients are returned in a list of the following form:
+
+    [A_0, A_1, phi_1, A_2, phi_2, ...]
+
+    Each of the A coefficients will be positive.
+
+    The number of (time, magnitude) values provided must be greater than or
+    equal to the order * 2 + 1. This is a requirement of the least squares
+    function used for calculating the coefficients.
+
+    Parameters
+    ----------
+    times : numpy.ndarray
+        The light curve times.
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+    order : int
+        The order of the fourier series to fit.
+
+    Returns
+    -------
+    fourier_coef : numpy.ndarray
+        The fit fourier coefficients.
+    """
+    times = times[:,0]
+    magnitudes = magnitudes[:,0]
+
+    num_examples = times.shape[0]
+    num_coef = order * 2 + 1
+
+    if num_coef > num_examples:
+        raise Exception("Too few examples for the specified order. Number of examples must be at least order * 2 + 1. Required: %d, Actual: %d" % (num_coef, num_examples))
+
+    initial_coef = np.ones(num_coef)
+
+    cost_function = partial(fourier_series_cost, times, magnitudes, order)
+
+    fitted_coef, success = leastsq(cost_function, initial_coef)
+
+    final_coef = correct_coef(fitted_coef, order)
+
+    return final_coef
+
+def correct_coef(coef, order):
+    """
+    Corrects the amplitudes in the given fourier coefficients so that all of
+    them are positive.
+
+    This is done by taking the absolute value of all the negative amplitude
+    coefficients and incrementing the corresponding phi weights by pi.
+
+    Parameters
+    ----------
+    fourier_coef : numpy.ndarray
+        The fit fourier coefficients.
+    order : int
+        The order of the fourier series to fit.
+
+    Returns
+    -------
+    cor_fourier_coef : numpy.ndarray
+        The corrected fit fourier coefficients.
+    """
+    coef = coef[:]
+    for k in range(order):
+        i = 2 * k + 1
+        if coef[i] < 0.0:
+            coef[i] = abs(coef[i])
+            coef[i + 1] += math.pi
+
+    return coef
+
+def fourier_series_cost(times, magnitudes, order, coef):
+    """
+    Returns the error of the fourier series of the given order and coefficients
+    in modeling the given light curve.
+
+    Parameters
+    ----------
+    times : numpy.ndarray
+        The light curve times.
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+    order : int
+        The order of the fourier series to fit.
+    fourier_coef : numpy.ndarray
+        The fit fourier coefficients.
+
+    Returns
+    -------
+    error : numpy.float64
+        The error of the fourier series in modeling the curve.
+    """
+    return magnitudes - fourier_series(times, coef, order)
+
+def fourier_series(times, coef, order):
+    """
+    Returns the magnitude values given by applying the fourier series described
+    by the given order and coefficients to the given time values.
+
+    Parameters
+    ----------
+    times : numpy.ndarray
+        The light curve times.
+    order : int
+        The order of the fourier series to fit.
+    fourier_coef : numpy.ndarray
+        The fit fourier coefficients.
+
+    Returns
+    -------
+    magnitudes : numpy.ndarray
+        The calculated light curve magnitudes.
+    """
+    cos_vals = [coef[2 * k + 1] * np.cos(2 * np.pi * (k + 1) * times + coef[2 * k + 2])
+            for k in range(order)]
+    cos_sum = np.sum(cos_vals, axis=0)
+
+    return coef[0] + cos_sum
+
+def fourier_R_1(coef, n):
+    """
+    Returns the caclulated R_n1 value for the given n using the given fourier
+    coefficients.
+
+    For example, giving an n value of 3 would yield the R_31 value of the
+    fourier series.
+
+    Parameters
+    ----------
+    fourier_coef : numpy.ndarray
+        The fit fourier coefficients.
+    n : int
+        The n value for the R_n1.
+
+    Returns
+    -------
+    r_n1 : numpy.float64
+        The calculated R_n1 value.
+    """
+    r_n = fourier_R(coef, n)
+    r_1 = fourier_R(coef, 1)
+    return r_n / r_1
+
+def fourier_R(coef, n):
+    return coef[2 * (n - 1) + 1]
+
+def fourier_phi_1(coef, n):
+    """
+    Returns the caclulated phi_n1 value for the given n using the given fourier
+    coefficients.
+
+    For example, giving an n value of 3 would yield the phi_31 value of the
+    fourier series.
+
+    The phi_n1 value returned is restricted to the range of [0, 2pi).
+
+    Parameters
+    ----------
+    fourier_coef : numpy.ndarray
+        The fit fourier coefficients.
+    n : int
+        The n value for the phi_n1.
+
+    Returns
+    -------
+    phi_n1 : numpy.float64
+        The calculated phi_n1 value.
+    """
+    phi_n = fourier_phi(coef, n)
+    phi_1 = fourier_phi(coef, 1)
+    return (phi_n - n * phi_1) % (2 * math.pi)
+
+def fourier_phi(coef, n):
+    return coef[2 * (n - 1) + 2]
 
 def mean_crosses(magnitudes):
     """
