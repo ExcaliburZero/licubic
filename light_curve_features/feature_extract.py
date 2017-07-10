@@ -34,8 +34,9 @@ def process_data(data, star_id_col, period_col, curves_dir, save_curve_files=Fal
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
         ,  "roms", "ptpv", "fourier_amplitude", "R_21", "R_31", "f_phase"
-        ,  "phi_21", "phi_31", "skewness", "kurtosis", "crosses",  "abv_1std"
-        ,  "bel_1std", "abv_1std_slopes", "bel_1std_slopes", "num_obs"
+        ,  "phi_21", "phi_31", "skewness", "kurtosis", "residual_br_fa_ratio"
+        ,  "shapiro_wilk", "crosses", "abv_1std", "bel_1std"
+        ,  "abv_1std_slopes", "bel_1std_slopes", "num_obs"
         ]
     data = pd.concat([data, pd.DataFrame(columns=columns)])
 
@@ -163,8 +164,9 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
         ,  "roms", "ptpv", "fourier_amplitude", "R_21", "R_31", "f_phase"
-        ,  "phi_21", "phi_31", "skewness", "kurtosis", "crosses",  "abv_1std"
-        ,  "bel_1std", "abv_1std_slopes", "bel_1std_slopes", "num_obs"
+        ,  "phi_21", "phi_31", "skewness", "kurtosis", "residual_br_fa_ratio"
+        ,  "shapiro_wilk", "crosses", "abv_1std", "bel_1std"
+        ,  "abv_1std_slopes", "bel_1std_slopes", "num_obs"
         ]
 
     star_id = data[star_id_col]
@@ -218,6 +220,8 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
 
     skewness = ss.skew(magnitudes)[0]
     kurtosis = ss.kurtosis(magnitudes)[0]
+    residual_br_fa_ratio = residual_bright_faint_ratio(magnitudes)
+    shapiro_wilk = ss.shapiro(magnitudes)[0]
 
     crosses = mean_crosses(sm_phase_magnitudes)
     abv_1std = above_1std(sm_phase_magnitudes)
@@ -229,8 +233,8 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
         ,  pa, totvar, quadvar, fslope, lc_rms
         ,  lc_flux_asymmetry, sm_phase_rms, periodicity, chi_2, iqr
         ,  roms, ptpv, fourier_amplitude, R_21, R_31, f_phase, phi_21, phi_31
-        ,  skewness, kurtosis, crosses, abv_1std, bel_1std, abv_1std_slopes
-        ,  bel_1std_slopes, num_obs
+        ,  skewness, kurtosis, residual_br_fa_ratio, shapiro_wilk, crosses
+        ,  abv_1std, bel_1std, abv_1std_slopes, bel_1std_slopes, num_obs
         ]
 
     if save_curve_files:
@@ -333,7 +337,7 @@ def maximum_slope(times, magnitudes):
 
     slopes = np.divide(mag_diffs, time_diffs)
 
-    max_slope = np.max(slopes[slopes != float("+inf")])
+    max_slope = np.max(slopes[np.logical_not(np.isinf(slopes))])
 
     return max_slope
 
@@ -961,6 +965,35 @@ def fourier_phi_1(coef, n):
 
 def fourier_phi(coef, n):
     return coef[2 * (n - 1) + 2]
+
+def residual_bright_faint_ratio(magnitudes):
+    """
+    Returns the ratio of the average squared variations from the mean of the
+    magnitudes fainter and brighter than the mean magnitude.
+
+    (D.-W. Kim et al, 2015) (1 & 2 & 3)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    ratio : numpy.float64
+        The residual bright faint ratio of the given magnitudes.
+    """
+    mean = np.mean(magnitudes)
+
+    brighter = magnitudes[magnitudes > mean]
+    fainter = magnitudes[magnitudes < mean]
+
+    resid_brighter = np.mean(np.square(brighter - mean))
+    resid_fainter = np.mean(np.square(fainter - mean))
+
+    ratio = resid_fainter / resid_brighter
+
+    return ratio
 
 def mean_crosses(magnitudes):
     """
