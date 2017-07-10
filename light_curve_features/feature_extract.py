@@ -35,8 +35,9 @@ def process_data(data, star_id_col, period_col, curves_dir, save_curve_files=Fal
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
         ,  "roms", "ptpv", "fourier_amplitude", "R_21", "R_31", "f_phase"
         ,  "phi_21", "phi_31", "skewness", "kurtosis", "residual_br_fa_ratio"
-        ,  "shapiro_wilk", "crosses", "abv_1std", "bel_1std"
-        ,  "abv_1std_slopes", "bel_1std_slopes", "num_obs"
+        ,  "shapiro_wilk", "slopes_10per", "slopes_90per", "cum_sum"
+        ,  "neumann_eta", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
+        ,  "bel_1std_slopes", "num_obs"
         ]
     data = pd.concat([data, pd.DataFrame(columns=columns)])
 
@@ -165,8 +166,9 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
         ,  "roms", "ptpv", "fourier_amplitude", "R_21", "R_31", "f_phase"
         ,  "phi_21", "phi_31", "skewness", "kurtosis", "residual_br_fa_ratio"
-        ,  "shapiro_wilk", "crosses", "abv_1std", "bel_1std"
-        ,  "abv_1std_slopes", "bel_1std_slopes", "num_obs"
+        ,  "shapiro_wilk", "slopes_10per", "slopes_90per", "cum_sum"
+        ,  "neumann_eta", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
+        ,  "bel_1std_slopes", "num_obs"
         ]
 
     star_id = data[star_id_col]
@@ -178,9 +180,9 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     errors = light_curve[:,2].reshape(num_obs, 1)
 
     phase_times = phase_fold(times, period)
+    phase_slopes = curve_slopes(phase_times, magnitudes)
 
     sm_phase_times, sm_phase_magnitudes = smooth_curve(phase_times, magnitudes)
-
     sm_phase_slopes = curve_slopes(sm_phase_times, sm_phase_magnitudes)
 
     #ls_period = lomb_scargle_periodogram(times, magnitudes, errors)
@@ -222,6 +224,10 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     kurtosis = ss.kurtosis(magnitudes)[0]
     residual_br_fa_ratio = residual_bright_faint_ratio(magnitudes)
     shapiro_wilk = ss.shapiro(magnitudes)[0]
+    slopes_10per = np.percentile(phase_slopes, 10)
+    slopes_90per = np.percentile(phase_slopes, 90)
+    cum_sum = cumulative_sum_range(magnitudes)
+    neumann_eta = von_neumann_eta(magnitudes)
 
     crosses = mean_crosses(sm_phase_magnitudes)
     abv_1std = above_1std(sm_phase_magnitudes)
@@ -233,7 +239,8 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
         ,  pa, totvar, quadvar, fslope, lc_rms
         ,  lc_flux_asymmetry, sm_phase_rms, periodicity, chi_2, iqr
         ,  roms, ptpv, fourier_amplitude, R_21, R_31, f_phase, phi_21, phi_31
-        ,  skewness, kurtosis, residual_br_fa_ratio, shapiro_wilk, crosses
+        ,  skewness, kurtosis, residual_br_fa_ratio, shapiro_wilk
+        ,  slopes_10per, slopes_90per, cum_sum, neumann_eta, crosses
         ,  abv_1std, bel_1std, abv_1std_slopes, bel_1std_slopes, num_obs
         ]
 
@@ -994,6 +1001,57 @@ def residual_bright_faint_ratio(magnitudes):
     ratio = resid_fainter / resid_brighter
 
     return ratio
+
+def cumulative_sum_range(magnitudes):
+    """
+    Returns the range of the cumulative sum of the given magnitudes.
+
+    (Kim et al., 2014) (6)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    cum_sum_range : numpy.float64
+        The range of the cumulative sum of the magnitudes.
+    """
+    cum_sums = np.cumsum(magnitudes)
+
+    cum_sum_range = np.max(cum_sums) - np.min(cum_sums)
+
+    return cum_sum_range
+
+def von_neumann_eta(magnitudes):
+    """
+    Returns the von Neumann eta measure of the degree of trends in the given
+    magnitudes.
+
+    (Kim et al., 2014) (5)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    eta : numpy.float64
+        The von Neumann eta of the magnitudes.
+    """
+    diffs = magnitudes[1:] - magnitudes[:-1]
+
+    sum_sq_diffs = np.sum(np.square(diffs))
+
+    std = np.std(magnitudes)
+
+    denom = (magnitudes.size - 1) * std ** 2
+
+    eta = sum_sq_diffs / denom
+
+    return eta
 
 def mean_crosses(magnitudes):
     """
