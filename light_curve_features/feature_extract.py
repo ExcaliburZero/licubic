@@ -224,8 +224,8 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     kurtosis = ss.kurtosis(magnitudes)[0]
     residual_br_fa_ratio = residual_bright_faint_ratio(magnitudes)
     shapiro_wilk = ss.shapiro(magnitudes)[0]
-    slopes_10per = np.percentile(phase_slopes, 10)
-    slopes_90per = np.percentile(phase_slopes, 90)
+    slopes_10per = np.percentile(phase_slopes[np.logical_not(np.isinf(phase_slopes))], 10)
+    slopes_90per = np.percentile(phase_slopes[np.logical_not(np.isinf(phase_slopes))], 90)
     cum_sum = cumulative_sum_range(magnitudes)
     neumann_eta = von_neumann_eta(magnitudes)
 
