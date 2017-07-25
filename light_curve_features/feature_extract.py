@@ -174,10 +174,16 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     star_id = data[star_id_col]
     period = data[period_col]
 
-    num_obs = light_curve.shape[0]
-    times = light_curve[:,0].reshape(num_obs, 1)
-    magnitudes = light_curve[:,1].reshape(num_obs, 1)
-    errors = light_curve[:,2].reshape(num_obs, 1)
+    times_dirty = light_curve[:,0]
+    magnitudes_dirty = light_curve[:,1]
+    errors_dirty = light_curve[:,2]
+
+    times, magnitudes, errors = clean_light_curve(times_dirty, magnitudes_dirty, errors_dirty)
+
+    num_obs = times.shape[0]
+    times = times.reshape(num_obs, 1)
+    magnitudes = magnitudes.reshape(num_obs, 1)
+    errors = errors.reshape(num_obs, 1)
 
     phase_times = phase_fold(times, period)
     phase_slopes = curve_slopes(phase_times, magnitudes)
@@ -249,6 +255,38 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
         save_curve(curves_dir, star_id, "sm_phase", sm_phase_times, sm_phase_magnitudes, ["phase", "Mag"])
 
     return new_data
+
+def clean_light_curve(times_dirty, magnitudes_dirty, errors_dirty):
+    """
+    Removes duplicate light curve observations and sorts them in chronological
+    order.
+
+    Parameters
+    ----------
+    times_dirty : numpy.ndarray
+        The light curve times.
+    magnitudes_dirty : numpy.ndarray
+        The light curve magnitudes.
+    errors_dirty : numpy.ndarray
+        The light curve errors.
+
+    Returns
+    -------
+    times : numpy.ndarray
+        The light curve times.
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+    errors : numpy.ndarray
+        The light curve errors.
+    """
+    _, unique_obs_ind = np.unique(times_dirty, return_index=True)
+    clean_ind = np.argsort(times_dirty[unique_obs_ind])
+
+    times = times_dirty[clean_ind]
+    magnitudes = magnitudes_dirty[clean_ind]
+    errors = errors_dirty[clean_ind]
+
+    return times, magnitudes, errors
 
 def save_curve(curves_dir, star_id, curve_name, times, magnitudes, columns):
     curve = pd.DataFrame(list(zip(times[:,0], magnitudes[:,0])), columns=columns)
