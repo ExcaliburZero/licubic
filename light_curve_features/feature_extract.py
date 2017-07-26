@@ -181,11 +181,8 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     times, magnitudes, errors = clean_light_curve(times_dirty, magnitudes_dirty, errors_dirty)
 
     num_obs = times.shape[0]
-    times = times.reshape(num_obs, 1)
-    magnitudes = magnitudes.reshape(num_obs, 1)
-    errors = errors.reshape(num_obs, 1)
 
-    phase_times = phase_fold(times, period)
+    phase_times, phase_magnitudes, phase_errors = phase_fold(times, magnitudes, errors, period)
     phase_slopes = curve_slopes(phase_times, magnitudes)
 
     sm_phase_times, sm_phase_magnitudes = smooth_curve(phase_times, magnitudes)
@@ -218,7 +215,7 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     ptpv = peak_to_peak_variability(magnitudes, errors)
 
     fourier_order = 3
-    fourier_coef = fourier_decomposition(phase_times, magnitudes, fourier_order)
+    fourier_coef = fourier_decomposition(phase_times, phase_magnitudes, fourier_order)
     fourier_amplitude = fourier_R(fourier_coef, 1)
     R_21 = fourier_R_1(fourier_coef, 2)
     R_31 = fourier_R_1(fourier_coef, 3)
@@ -285,6 +282,11 @@ def clean_light_curve(times_dirty, magnitudes_dirty, errors_dirty):
     times = times_dirty[clean_ind]
     magnitudes = magnitudes_dirty[clean_ind]
     errors = errors_dirty[clean_ind]
+
+    num_obs = times.shape[0]
+    times = times.reshape(num_obs, 1)
+    magnitudes = magnitudes.reshape(num_obs, 1)
+    errors = errors.reshape(num_obs, 1)
 
     return times, magnitudes, errors
 
@@ -570,15 +572,21 @@ def quadratic_variation(magnitudes):
 
     return np.sum(sq_diffs) / m
 
-def phase_fold(times, period):
+def phase_fold(times, magnitudes, errors, period):
     """
     Folds the given light curve over its period to express the curve in terms
     of phase rather than time.
+
+    The returned values are sorted in phase order.
 
     Parameters
     ----------
     times : numpy.ndarray
         The light curve times.
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+    errors : numpy.ndarray
+        The light curve errors.
     period : numpy.float64
         The light curve period.
 
@@ -586,10 +594,25 @@ def phase_fold(times, period):
     -------
     phase_times : numpy.ndarray
         The light curve times in terms of phase.
+    phase_magnitudes : numpy.ndarray
+        The light curve magnitudes sorted by phase times.
+    phase_errors : numpy.ndarray
+        The light curve errors sorted by phase times.
     """
-    phase_times = (times % period) / period
+    phase_times_unordered = (times % period) / period
 
-    return phase_times
+    ordered_ind = np.argsort(phase_times_unordered)
+
+    phase_times = phase_times_unordered[ordered_ind]
+    phase_magnitudes = magnitudes[ordered_ind]
+    phase_errors = errors[ordered_ind]
+
+    num_obs = phase_times.shape[0]
+    phase_times = phase_times.reshape(num_obs, 1)
+    phase_magnitudes = phase_magnitudes.reshape(num_obs, 1)
+    phase_errors = phase_errors.reshape(num_obs, 1)
+
+    return phase_times, phase_magnitudes, phase_errors
 
 def smooth_curve(times, magnitudes):
     """

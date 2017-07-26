@@ -205,18 +205,20 @@ class TestFeatureExtract(unittest.TestCase):
 
     def test_periodicity_metric(self):
         expected_results = [
-            1.0029310383570502,
-            0.9911085682696126,
-            0.9976110027920946,
-            0.9737421892363514
+            0.9457703199149757,
+            0.9866690054373894,
+            1.1195695496210765,
+            0.9498991570947354
         ]
 
         def test(curve):
             times = curve[TIMES]
             magnitudes = curve[MAGNITUDES]
+            errors = curve[ERRORS]
 
             period = 0.5
-            phase_times = feature_extract.phase_fold(times, period)
+            phase_times, phase_magnitudes, phase_errors = \
+                feature_extract.phase_fold(times, magnitudes, errors, period)
 
             sm_phase_times, sm_phase_magnitudes = feature_extract.smooth_curve(phase_times, magnitudes)
 
