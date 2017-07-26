@@ -30,6 +30,15 @@ def process_data(data, star_id_col, period_col, curves_dir, save_curve_files=Fal
         If True, then the intermediate light curves are saved to the
         curves_dir.
     """
+    data = add_feature_columns(data)
+
+    extract_func = partial(extract_with_curve, curves_dir, save_curve_files
+            , star_id_col, period_col)
+    new_data = data.apply(extract_func, axis=1)
+
+    return new_data
+
+def add_feature_columns(data):
     columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
@@ -39,11 +48,7 @@ def process_data(data, star_id_col, period_col, curves_dir, save_curve_files=Fal
         ,  "neumann_eta", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
         ,  "bel_1std_slopes", "num_obs"
         ]
-    data = pd.concat([data, pd.DataFrame(columns=columns)])
-
-    extract_func = partial(extract_with_curve, curves_dir, save_curve_files
-            , star_id_col, period_col)
-    new_data = data.apply(extract_func, axis=1)
+    new_data = pd.concat([data, pd.DataFrame(columns=columns)])
 
     return new_data
 
@@ -600,7 +605,7 @@ def phase_fold(times, magnitudes, errors, period):
     """
     phase_times_unordered = (times % period) / period
 
-    ordered_ind = np.argsort(phase_times_unordered)
+    ordered_ind = np.argsort(phase_times_unordered, axis=0)
 
     phase_times = phase_times_unordered[ordered_ind]
     phase_magnitudes = magnitudes[ordered_ind]

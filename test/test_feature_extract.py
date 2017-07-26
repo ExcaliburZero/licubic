@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import unittest
 
 from light_curve_features import feature_extract
@@ -205,10 +206,10 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
     def test_periodicity_metric(self):
         expected_results = [
-            0.9457703199149757,
-            0.9866690054373894,
-            1.1195695496210765,
-            0.9498991570947354
+            1.0002414654912055,
+            1.0110139136470442,
+            0.9976110027920946,
+            0.9787365158352862
         ]
 
         def test(curve):
@@ -481,6 +482,25 @@ class TestFeatureExtractFeatures(unittest.TestCase):
             return feature_extract.above_below_1std_slopes(slopes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
+
+    def test_extract_features(self):
+        star_id_col = "id"
+        period_col = "period"
+        data = pd.DataFrame(["jne2e"])
+        data.columns = [star_id_col]
+        data[period_col] = 0.2342
+        data = feature_extract.add_feature_columns(data)
+        data = data.iloc[0]
+
+        curves_dir = ""
+        save_curve_files = False
+
+        times = np.arange(0, 10.0, 0.5)
+        magnitudes = np.sin(times) + 14.0
+        errors = times / 100.0
+        light_curve = np.transpose(np.vstack([times, magnitudes, errors]))
+
+        feature_extract.extract_features(data, star_id_col, period_col, light_curve, curves_dir, save_curve_files)
 
 class TestFeatureExtractUtilities(unittest.TestCase):
 
