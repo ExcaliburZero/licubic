@@ -1,3 +1,5 @@
+from dask import delayed
+
 import itertools
 import numpy as np
 import sklearn.ensemble
@@ -10,10 +12,16 @@ def feature_matrix(category_col, features_cols, data):
 
     print(combinations)
 
-    cells = [compute_cell(category_col, features_cols, data, a, b) for (a, b) in combinations]
+    calculations = []
+    for (a, b) in combinations:
+        calc = delayed(compute_cell)(category_col, features_cols, data, a, b)
+        calculations.append(calc)
+
+    #cells = [compute_cell(category_col, features_cols, data, a, b) for (a, b) in combinations]
+    cells = delayed(calculations).compute()
     matrix = list(zip(combinations, cells))
 
-    print(matrix)
+    return matrix
 
 def compute_cell(category_col, features_cols, data, a, b):
     if a == b:
@@ -29,12 +37,16 @@ def a_against_all(category_col, features_cols, data, a):
 
     features_and_score = calculate_features(is_a_col, features_cols, new_data)
 
+    print(a + " vs ~" + a)
+
     return features_and_score
 
 def a_against_b(category_col, features_cols, data, a, b):
     new_data = data[data[category_col].isin([a, b])]
 
     features_and_score = calculate_features(category_col, features_cols, new_data)
+
+    print(a + " vs " + b)
 
     return features_and_score
 
@@ -48,7 +60,7 @@ def calculate_features(category_col, features_cols, data):
     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
         X, y, test_size=test_size, random_state=0)
 
-    rf = sklearn.ensemble.RandomForestClassifier(random_state=0)
+    rf = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", random_state=0)
     rf.fit(X_train, y_train)
 
     score = rf.score(X_test, y_test)

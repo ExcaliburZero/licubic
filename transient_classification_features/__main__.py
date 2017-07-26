@@ -18,7 +18,26 @@ def main():
     data = pd.read_csv(data_file)
     data = data[[category_col] + features_cols].dropna()
 
-    compairisons.feature_matrix(category_col, features_cols, data)
+    matrix = compairisons.feature_matrix(category_col, features_cols, data)
+
+    print_matrix(matrix)
+
+def print_matrix(matrix):
+    for cell in matrix:
+        a = cell[0][0]
+        b = cell[0][1]
+        line = ""
+        if a == b:
+            line += a + " vs ~" + a
+        else:
+            line += a + " vs " + b
+        line += " = " + str(cell[1][1]) + "\n"
+
+        for (feature, importance) in cell[1][0]:
+            line += "\t" + feature + " = " + str(importance) + "\n"
+
+        print(line)
+
 
 if __name__ == "__main__":
     main()
