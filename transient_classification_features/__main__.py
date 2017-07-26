@@ -13,11 +13,17 @@ def main():
     features_cols = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "lc_flux_asymmetry", "chi_2", "iqr"
         ,  "roms", "ptpv", "skewness", "kurtosis"
-        ,  "abv_1std", "bel_1std"
         ]
 
     data = pd.read_csv(data_file)
-    data = data[[category_col] + features_cols].dropna()
+    data = data[[category_col] + features_cols]
+
+    size_before = len(data)
+    data = data.dropna()
+    size_after = len(data)
+
+    if size_before > size_after:
+        print("%d points removed to to missing feature values." % (size_before - size_after))
 
     matrix = compairisons.feature_matrix(category_col, features_cols, data)
 

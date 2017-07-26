@@ -54,19 +54,20 @@ def a_against_b(category_col, features_cols, data, a, b):
     return features_and_score
 
 def calculate_features(category_col, features_cols, data):
-    test_size = 0.4
+    test_size = 0.2
     n_best = 3
+    random_state = 42
 
     X = data.as_matrix(features_cols)
     y = data[category_col]
 
     X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
-        X, y, test_size=test_size, random_state=0)
+        X, y, test_size=test_size, random_state=random_state)
 
-    rf = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", random_state=0)
+    rf = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", random_state=random_state)
     rf.fit(X_train, y_train)
 
-    score = rf.score(X_test, y_test)
+    #score = rf.score(X_test, y_test)
 
     importances = rf.feature_importances_
     feature_indexes = np.argsort(importances)[::-1][:n_best]
@@ -74,5 +75,16 @@ def calculate_features(category_col, features_cols, data):
     best_features = np.array(features_cols)[feature_indexes]
 
     best_features_info = list(zip(best_features, importances[feature_indexes]))
+
+    X_2 = data.as_matrix(best_features)
+    y_2 = data[category_col]
+
+    X_train_2, X_test_2, y_train_2, y_test_2 = sklearn.model_selection.train_test_split(
+        X_2, y_2, test_size=test_size, random_state=random_state)
+
+    rf_2 = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", random_state=random_state)
+    rf_2.fit(X_train_2, y_train_2)
+
+    score = rf_2.score(X_test_2, y_test_2)
 
     return best_features_info, score
