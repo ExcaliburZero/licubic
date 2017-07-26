@@ -19,7 +19,10 @@ def feature_matrix(category_col, features_cols, data):
 
     #cells = [compute_cell(category_col, features_cols, data, a, b) for (a, b) in combinations]
     cells = delayed(calculations).compute()
-    matrix = list(zip(combinations, cells))
+
+    matrix = {}
+    for i in range(len(cells)):
+        matrix[combinations[i]] = cells[i]
 
     return matrix
 
