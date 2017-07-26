@@ -276,8 +276,7 @@ def clean_light_curve(times_dirty, magnitudes_dirty, errors_dirty):
     errors : numpy.ndarray
         The light curve errors.
     """
-    _, unique_obs_ind = np.unique(times_dirty, return_index=True)
-    clean_ind = np.argsort(times_dirty[unique_obs_ind])
+    _, clean_ind = np.unique(times_dirty, return_index=True)
 
     times = times_dirty[clean_ind]
     magnitudes = magnitudes_dirty[clean_ind]

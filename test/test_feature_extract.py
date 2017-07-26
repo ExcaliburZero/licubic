@@ -48,7 +48,7 @@ def try_expected(self, curves, expected_results, test):
         else:
             self.assertEqual(expected, actual)
 
-class TestFeatureExtract(unittest.TestCase):
+class TestFeatureExtractFeatures(unittest.TestCase):
     """
     The tests defined here are regression tests used primarily to ensure that
     changes to the functions do not lead to changes in the program results.
@@ -481,3 +481,57 @@ class TestFeatureExtract(unittest.TestCase):
             return feature_extract.above_below_1std_slopes(slopes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
+
+class TestFeatureExtractUtilities(unittest.TestCase):
+
+    def test_clean_light_curve_ordered(self):
+        """
+        An already ordered light curve with no duplicate observations should be
+        returned the same.
+        """
+        times = np.array([[0.0], [1.3], [2.9], [3.0]])
+        magnitudes = np.array([[14.2], [14.0], [13.9], [14.2]])
+        errors = np.array([[0.005], [0.01], [0.02], [0.001]])
+
+        act_time, act_mags, act_err = feature_extract.clean_light_curve(times, magnitudes, errors)
+
+        np.testing.assert_allclose(act_time, times, rtol=1e-5)
+        np.testing.assert_allclose(act_mags, magnitudes, rtol=1e-5)
+        np.testing.assert_allclose(act_err, errors, rtol=1e-5)
+
+    def test_clean_light_curve_unsorted(self):
+        """
+        An unsorted light curve should be returned sorted.
+        """
+        times = np.array([[3.9], [1.3], [4.9], [3.0]])
+        magnitudes = np.array([[14.2], [14.0], [13.9], [14.2]])
+        errors = np.array([[0.005], [0.01], [0.02], [0.001]])
+
+        act_time, act_mags, act_err = feature_extract.clean_light_curve(times, magnitudes, errors)
+
+        exp_time = np.array([[1.3], [3.0], [3.9], [4.9]])
+        exp_mags = np.array([[14.0], [14.2], [14.2], [13.9]])
+        exp_err = np.array([[0.01], [0.001], [0.005], [0.02]])
+
+        np.testing.assert_allclose(act_time, exp_time, rtol=1e-5)
+        np.testing.assert_allclose(act_mags, exp_mags, rtol=1e-5)
+        np.testing.assert_allclose(act_err, exp_err, rtol=1e-5)
+
+    def test_clean_light_curve_duplicates(self):
+        """
+        An unsorted light curve with duplicate should be returned sorted
+        without the duplicate observation.
+        """
+        times = np.array([[1.3], [1.3], [4.9], [3.0]])
+        magnitudes = np.array([[14.2], [14.2], [13.9], [14.2]])
+        errors = np.array([[0.01], [0.01], [0.02], [0.001]])
+
+        act_time, act_mags, act_err = feature_extract.clean_light_curve(times, magnitudes, errors)
+
+        exp_time = np.array([[1.3], [3.0], [4.9]])
+        exp_mags = np.array([[14.2], [14.2], [13.9]])
+        exp_err = np.array([[0.01], [0.001], [0.02]])
+
+        np.testing.assert_allclose(act_time, exp_time, rtol=1e-5)
+        np.testing.assert_allclose(act_mags, exp_mags, rtol=1e-5)
+        np.testing.assert_allclose(act_err, exp_err, rtol=1e-5)
