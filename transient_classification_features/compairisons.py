@@ -2,8 +2,11 @@ from dask import delayed
 
 import itertools
 import numpy as np
+import operator
 import sklearn.ensemble
 import sklearn.model_selection
+import sklearn.metrics
+import sklearn.preprocessing
 
 def feature_matrix(category_col, features_cols, data):
     categories = data[category_col].unique()
@@ -25,6 +28,18 @@ def feature_matrix(category_col, features_cols, data):
         matrix[combinations[i]] = cells[i]
 
     return matrix
+
+def rank_features(matrix):
+    best_features = []
+    for key in matrix:
+        entry = matrix[key]
+
+        for f in entry[0]:
+            best_features.append(f[0])
+
+    features_ranking = {x: best_features.count(x) for x in best_features}
+
+    return sorted(features_ranking.items(), key=operator.itemgetter(1))[::-1]
 
 def compute_cell(category_col, features_cols, data, a, b):
     if a == b:
@@ -67,7 +82,7 @@ def calculate_features(category_col, features_cols, data):
     rf = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", random_state=random_state)
     rf.fit(X_train, y_train)
 
-    #score = rf.score(X_test, y_test)
+    score_1 = score(rf, X_test, y_test)
 
     importances = rf.feature_importances_
     feature_indexes = np.argsort(importances)[::-1][:n_best]
@@ -85,6 +100,19 @@ def calculate_features(category_col, features_cols, data):
     rf_2 = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", random_state=random_state)
     rf_2.fit(X_train_2, y_train_2)
 
-    score = rf_2.score(X_test_2, y_test_2)
+    score_2 = score(rf_2, X_test_2, y_test_2)
 
-    return best_features_info, score
+    return best_features_info, score_1, score_2
+
+def score(model, X, y):
+    y = np.array(y)
+
+    y_pred = model.predict(X)
+
+    encoder = sklearn.preprocessing.LabelEncoder()
+    encoder.fit(np.concatenate([y, y_pred]))
+
+    y = encoder.transform(y)
+    y_pred = encoder.transform(y_pred)
+
+    return sklearn.metrics.f1_score(y, y_pred)

@@ -23,14 +23,16 @@ def main():
     size_after = len(data)
 
     if size_before > size_after:
-        print("%d points removed to to missing feature values." % (size_before - size_after))
+        print("%d points removed due to missing feature values." % (size_before - size_after))
 
     matrix = compairisons.feature_matrix(category_col, features_cols, data)
 
-    #print_matrix(matrix)
-
     categories = data[category_col].unique()
     print(html_matrix(matrix, categories))
+
+    print("")
+    print("")
+    print(list_best_features(matrix))
 
 def print_matrix(matrix):
     for key in matrix:
@@ -50,13 +52,16 @@ def print_matrix(matrix):
         print(line)
 
 def html_matrix(matrix, categories):
-    table = "<table>"
+    table = "<table id='fixed' class='fancyTable'>"
+    table += "<thead>"
     table += "<tr>"
-    table += "<th></th>"
+    table += "<td></td>"
     for a in categories:
         table += "<th>" + a + "</th>"
     table += "</tr>"
+    table += "</thead>"
 
+    table += "<tbody>"
     for a in categories:
         table += "<tr>"
         table += "<th>" + a + "</th>"
@@ -67,16 +72,25 @@ def html_matrix(matrix, categories):
             if comb in matrix:
                 #table += str(matrix[comb])
                 features = np.array(matrix[comb][0])[:,0]
-                score = matrix[comb][1]
+                score_1 = matrix[comb][1]
+                score_2 = matrix[comb][2]
 
-                table += "%.2f" % score + "<br />"
+                table += "%.2f ~ %.2f" % (score_1, score_2) + "<br />"
                 table += "<br />".join(features)
 
             table += "</td>"
         table += "</tr>"
+    table += "</tbody>"
     table += "</table>"
 
     return table
+
+def list_best_features(matrix):
+    lines = ""
+    for (f,v) in compairisons.rank_features(matrix):
+        lines += f + " = " + str(v) + "\n"
+
+    return lines
 
 if __name__ == "__main__":
     main()
