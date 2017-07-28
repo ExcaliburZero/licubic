@@ -39,10 +39,10 @@ def process_data(data, star_id_col, period_col, curves_dir, save_curve_files=Fal
     return new_data
 
 def add_feature_columns(data):
-    columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
+    columns = ["ampl", "lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
-        ,  "roms", "ptpv", "fourier_amplitude", "R_21", "R_31", "f_phase"
+        ,  "roms", "ptpv", "stetson_I", "stetson_K", "fourier_amplitude", "R_21", "R_31", "f_phase"
         ,  "phi_21", "phi_31", "skewness", "kurtosis", "residual_br_fa_ratio"
         ,  "shapiro_wilk", "slopes_10per", "slopes_90per", "cum_sum"
         ,  "neumann_eta", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
@@ -166,18 +166,25 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     """
     new_data = data.copy()
 
-    columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
-        ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
-        ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
-        ,  "roms", "ptpv", "fourier_amplitude", "R_21", "R_31", "f_phase"
-        ,  "phi_21", "phi_31", "skewness", "kurtosis", "residual_br_fa_ratio"
+    #columns = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
+    #    ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
+    #    ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
+    #    ,  "roms", "ptpv", "fourier_amplitude", "R_21", "R_31", "f_phase"
+    #    ,  "phi_21", "phi_31", "skewness", "kurtosis", "residual_br_fa_ratio"
+    #    ,  "shapiro_wilk", "slopes_10per", "slopes_90per", "cum_sum"
+    #    ,  "neumann_eta", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
+    #    ,  "bel_1std_slopes", "num_obs"
+    columns = ["ampl", "lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
+        ,  "pa"
+        ,  "lc_flux_asymmetry", "chi_2", "iqr"
+        ,  "roms", "ptpv", "stetson_I", "stetson_K", "skewness", "kurtosis", "residual_br_fa_ratio"
         ,  "shapiro_wilk", "slopes_10per", "slopes_90per", "cum_sum"
-        ,  "neumann_eta", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
+        ,  "neumann_eta", "abv_1std", "bel_1std", "abv_1std_slopes"
         ,  "bel_1std_slopes", "num_obs"
         ]
 
     star_id = data[star_id_col]
-    period = data[period_col]
+    #period = data[period_col]
 
     times_dirty = light_curve[:,0]
     magnitudes_dirty = light_curve[:,1]
@@ -186,15 +193,17 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     times, magnitudes, errors = clean_light_curve(times_dirty, magnitudes_dirty, errors_dirty)
 
     num_obs = times.shape[0]
+    slopes = curve_slopes(times, magnitudes)
 
-    phase_times, phase_magnitudes, phase_errors = phase_fold(times, magnitudes, errors, period)
-    phase_slopes = curve_slopes(phase_times, magnitudes)
+    #phase_times, phase_magnitudes, phase_errors = phase_fold(times, magnitudes, errors, period)
+    #phase_slopes = curve_slopes(phase_times, magnitudes)
 
-    sm_phase_times, sm_phase_magnitudes = smooth_curve(phase_times, magnitudes)
-    sm_phase_slopes = curve_slopes(sm_phase_times, sm_phase_magnitudes)
+    #sm_phase_times, sm_phase_magnitudes = smooth_curve(phase_times, magnitudes)
+    #sm_phase_slopes = curve_slopes(sm_phase_times, sm_phase_magnitudes)
 
     #ls_period = lomb_scargle_periodogram(times, magnitudes, errors)
 
+    ampl = amplitude(magnitudes)
     lt = linear_trend(times, magnitudes)
     mr = magnitude_ratio(magnitudes)
     ms = maximum_slope(times, magnitudes)
@@ -205,56 +214,69 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     mbrp = median_buffer_range_percentage(magnitudes)
     pa = percent_amplitude(magnitudes)
 
-    totvar = total_variation(sm_phase_magnitudes)
-    quadvar = total_variation(sm_phase_magnitudes)
-    fslope = maximum_slope(sm_phase_times, sm_phase_magnitudes)
+    #totvar = total_variation(sm_phase_magnitudes)
+    #quadvar = total_variation(sm_phase_magnitudes)
+    #fslope = maximum_slope(sm_phase_times, sm_phase_magnitudes)
 
     lc_rms = root_mean_square(magnitudes)
     lc_flux_asymmetry = light_curve_flux_asymmetry(magnitudes, lc_rms)
-    sm_phase_rms = root_mean_square(sm_phase_magnitudes)
-    periodicity = periodicity_metric(lc_rms, sm_phase_rms)
+    #sm_phase_rms = root_mean_square(sm_phase_magnitudes)
+    #periodicity = periodicity_metric(lc_rms, sm_phase_rms)
 
     chi_2 = chi_2_test(magnitudes, errors)
     iqr = interquartile_range(magnitudes)
     roms = robust_median_statistic(magnitudes, errors)
     ptpv = peak_to_peak_variability(magnitudes, errors)
+    stetson_I = welch_stetson_I(magnitudes, errors)
+    stetson_K = welch_stetson_K(magnitudes, errors)
 
-    fourier_order = 3
-    fourier_coef = fourier_decomposition(phase_times, phase_magnitudes, fourier_order)
-    fourier_amplitude = fourier_R(fourier_coef, 1)
-    R_21 = fourier_R_1(fourier_coef, 2)
-    R_31 = fourier_R_1(fourier_coef, 3)
-    f_phase = fourier_phi(fourier_coef, 1)
-    phi_21 = fourier_phi_1(fourier_coef, 2)
-    phi_31 = fourier_phi_1(fourier_coef, 3)
+    #fourier_order = 3
+    #fourier_coef = fourier_decomposition(phase_times, phase_magnitudes, fourier_order)
+    #fourier_amplitude = fourier_R(fourier_coef, 1)
+    #R_21 = fourier_R_1(fourier_coef, 2)
+    #R_31 = fourier_R_1(fourier_coef, 3)
+    #f_phase = fourier_phi(fourier_coef, 1)
+    #phi_21 = fourier_phi_1(fourier_coef, 2)
+    #phi_31 = fourier_phi_1(fourier_coef, 3)
 
     skewness = ss.skew(magnitudes)[0]
     kurtosis = ss.kurtosis(magnitudes)[0]
     residual_br_fa_ratio = residual_bright_faint_ratio(magnitudes)
     shapiro_wilk = ss.shapiro(magnitudes)[0]
-    slopes_10per = np.percentile(phase_slopes[np.logical_not(np.isinf(phase_slopes))], 10)
-    slopes_90per = np.percentile(phase_slopes[np.logical_not(np.isinf(phase_slopes))], 90)
+    #slopes_10per = np.percentile(phase_slopes[np.logical_not(np.isinf(phase_slopes))], 10)
+    #slopes_90per = np.percentile(phase_slopes[np.logical_not(np.isinf(phase_slopes))], 90)
+    slopes_10per = np.percentile(slopes[np.logical_not(np.isinf(slopes))], 10)
+    slopes_90per = np.percentile(slopes[np.logical_not(np.isinf(slopes))], 90)
     cum_sum = cumulative_sum_range(magnitudes)
     neumann_eta = von_neumann_eta(magnitudes)
 
-    crosses = mean_crosses(sm_phase_magnitudes)
-    abv_1std = above_1std(sm_phase_magnitudes)
-    bel_1std = beyond_1std(sm_phase_magnitudes) - abv_1std
+    #crosses = mean_crosses(sm_phase_magnitudes)
+    #abv_1std = above_1std(sm_phase_magnitudes)
+    #bel_1std = beyond_1std(sm_phase_magnitudes) - abv_1std
+    abv_1std = above_1std(magnitudes)
+    bel_1std = beyond_1std(magnitudes) - abv_1std
 
-    abv_1std_slopes, bel_1std_slopes = above_below_1std_slopes(sm_phase_slopes)
+    abv_1std_slopes, bel_1std_slopes = above_below_1std_slopes(slopes)
 
-    new_data[columns] = [lt, mr, ms, b1std, rcb, std, mad, mbrp
-        ,  pa, totvar, quadvar, fslope, lc_rms
-        ,  lc_flux_asymmetry, sm_phase_rms, periodicity, chi_2, iqr
-        ,  roms, ptpv, fourier_amplitude, R_21, R_31, f_phase, phi_21, phi_31
-        ,  skewness, kurtosis, residual_br_fa_ratio, shapiro_wilk
-        ,  slopes_10per, slopes_90per, cum_sum, neumann_eta, crosses
+    #new_data[columns] = [lt, mr, ms, b1std, rcb, std, mad, mbrp
+    #    ,  pa, totvar, quadvar, fslope, lc_rms
+    #    ,  lc_flux_asymmetry, sm_phase_rms, periodicity, chi_2, iqr
+    #    ,  roms, ptpv, fourier_amplitude, R_21, R_31, f_phase, phi_21, phi_31
+    #    ,  skewness, kurtosis, residual_br_fa_ratio, shapiro_wilk
+    #    ,  slopes_10per, slopes_90per, cum_sum, neumann_eta, crosses
+    #    ,  abv_1std, bel_1std, abv_1std_slopes, bel_1std_slopes, num_obs
+    #    ]
+    new_data[columns] = [ampl, lt, mr, ms, b1std, rcb, std, mad, mbrp
+        ,  pa
+        ,  lc_flux_asymmetry, chi_2, iqr
+        ,  roms, ptpv, stetson_I, stetson_K, skewness, kurtosis, residual_br_fa_ratio, shapiro_wilk
+        ,  slopes_10per, slopes_90per, cum_sum, neumann_eta
         ,  abv_1std, bel_1std, abv_1std_slopes, bel_1std_slopes, num_obs
         ]
 
-    if save_curve_files:
-        save_curve(curves_dir, star_id, "phase", phase_times, magnitudes, ["phase", "Mag"])
-        save_curve(curves_dir, star_id, "sm_phase", sm_phase_times, sm_phase_magnitudes, ["phase", "Mag"])
+    #if save_curve_files:
+    #    save_curve(curves_dir, star_id, "phase", phase_times, magnitudes, ["phase", "Mag"])
+    #    save_curve(curves_dir, star_id, "sm_phase", sm_phase_times, sm_phase_magnitudes, ["phase", "Mag"])
 
     return new_data
 
@@ -300,6 +322,29 @@ def save_curve(curves_dir, star_id, curve_name, times, magnitudes, columns):
     curve_path = get_curve_path(curves_dir, "%s_%s" % (star_id, curve_name))
 
     curve.to_csv(curve_path, index=False)
+
+def amplitude(magnitudes):
+    """
+    Returns the amplitude of the light curve, defined as half the difference
+    between the minimum and maximum magnitudes.
+
+    ampl = (max_mag - min_mag) / 2
+
+    (D'Isanto et al., 2015) (2.1.1)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+
+    Returns
+    -------
+    ampl : numpy.float64
+        The amplitude of the light curve.
+    """
+    ampl = 0.5 * (np.max(magnitudes) - np.min(magnitudes))
+
+    return ampl
 
 def lomb_scargle_periodogram(times, magnitudes, errors):
     ls = LombScargle(times[:,0], magnitudes[:,0], errors[:,0])
@@ -850,6 +895,62 @@ def peak_to_peak_variability(magnitudes, errors):
 
     ptpv = (max_diff - min_sum) / (max_diff + min_sum)
     return ptpv
+
+def welch_stetson_I(magnitudes, errors):
+    """
+    Returns the Welch-Stetson variability index I of the light curve.
+
+    (Sokolovsky et al., 2016) (11)
+
+    Parameters
+    ----------
+    magnitudes : numpy.ndarray
+        The light curve magnitudes.
+    errors : numpy.ndarray
+        The light curve observation errors.
+
+    Returns
+    -------
+    stetson_I : numpy.float64
+        The Welch-Stetson variability index I of the light curve.
+    """
+    num_obs = magnitudes.shape[0]
+
+    if num_obs % 2 == 1:
+        magnitudes = magnitudes[:-1]
+        errors = errors[:-1]
+        num_obs -= 1
+
+    evens = np.arange(0, num_obs, 2)
+    odds = np.arange(1, num_obs, 2)
+
+    b = magnitudes[evens]
+    v = magnitudes[odds]
+
+    b_err = magnitudes[evens]
+    v_err = magnitudes[odds]
+
+    mean = np.mean(magnitudes)
+
+    d = (b - mean) / b_err
+    e = (v - mean) / v_err
+    stetson_I = np.sqrt(1 / (num_obs * (num_obs - 1))) * np.sum(d * e)
+
+    return stetson_I
+
+def welch_stetson_K(magnitudes, errors):
+    num_obs = magnitudes.shape[0]
+
+    mean_mag = np.mean(magnitudes)
+
+    a = np.sqrt(num_obs / (num_obs - 1)) * ((magnitudes - mean_mag) / errors)
+
+    b = np.mean(np.absolute(a))
+    c = np.sqrt(np.mean(np.square(a)))
+
+    stetson_K = b / c
+
+    return stetson_K
 
 def fourier_decomposition(times, magnitudes, order):
     """

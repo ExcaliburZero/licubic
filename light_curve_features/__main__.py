@@ -21,8 +21,10 @@ def main():
 
     data = pd.read_csv(args.data_file, nrows=args.nrows)
 
-    data = data[[args.star_id_col, args.period_col, args.category_col]]
-    data.columns = ["id", "period", "category"]
+    #data = data[[args.star_id_col, args.period_col, args.category_col]]
+    #data.columns = ["id", "period", "category"]
+    data = data[[args.star_id_col, args.category_col]]
+    data.columns = ["id", "category"]
 
     fix_star_id_col(data, "id")
 
