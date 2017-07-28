@@ -73,7 +73,6 @@ def a_against_b(category_col, features_cols, data, a, b):
 
 def calculate_features(category_col, features_cols, data, labels):
     test_size = 0.2
-    n_best = 3
     random_state = 42
 
     X = data.as_matrix(features_cols)
@@ -81,26 +80,34 @@ def calculate_features(category_col, features_cols, data, labels):
 
     score_1, importances = get_feature_importances(X, y, labels)
 
-    feature_indexes = np.argsort(importances)[::-1][:n_best]
+    feature_indexes = np.argsort(importances)[::-1]
+    sorted_features_cols = np.array(features_cols)[feature_indexes]
 
-    best_features = np.array(features_cols)[feature_indexes]
+    n_best = choose_num_features(data, category_col, sorted_features_cols)
 
-    best_features_info = list(zip(best_features, importances[feature_indexes]))
+    best_feature_indexes = feature_indexes[:n_best]
+
+    best_features = np.array(features_cols)[best_feature_indexes]
+
+    best_features_info = list(zip(best_features, importances[best_feature_indexes]))
 
     X_2 = data.as_matrix(best_features)
     y_2 = y
 
     score_2, _ = get_feature_importances(X_2, y_2, labels)
 
-    return best_features_info, score_1, score_2
+    a_examples = len(data[data[category_col] == labels[0]])
+    b_examples = len(data[data[category_col] == labels[1]])
+
+    return best_features_info, score_1, score_2, a_examples, b_examples
 
 def get_feature_importances(X, y, labels):
     n_estimators = 10
     random_state = 42
-    cv = 2
+    cv = 5
     shuffle = True
 
-    kf = sklearn.model_selection.StratifiedKFold(n_splits=cv, shuffle=shuffle, random_state=random_state)
+    kf = sklearn.model_selection.KFold(n_splits=cv, shuffle=shuffle, random_state=random_state)
     cv_scores = []
     importances = []
     for train, test in kf.split(X, y):
@@ -111,7 +118,7 @@ def get_feature_importances(X, y, labels):
         rf.fit(X_train, y_train)
 
         importances.append(rf.feature_importances_)
-        cv_scores.append(score(rf, X_test, y_test, labels))
+        cv_scores.append(confusion_matrix(rf, X_test, y_test, labels))
 
     mean_score = np.mean(cv_scores, axis=0)
 
@@ -120,7 +127,48 @@ def get_feature_importances(X, y, labels):
 
     return mean_score, importances
 
-def score(model, X, y, labels):
+def choose_num_features(data, category_col, sorted_features_cols):
+    n_estimators = 10
+    random_state = 42
+    cv = 5
+    shuffle = True
+
+    increase_threshold = 0.05
+
+    y = np.array(data[category_col])
+
+    num_features = 1
+    prev_score = 0.0
+    for i in range(len(sorted_features_cols)):
+        features = sorted_features_cols[0:i + 1]
+
+        X = data.as_matrix(features)
+
+        kf = sklearn.model_selection.KFold(n_splits=cv, shuffle=shuffle, random_state=random_state)
+        cv_scores = []
+        importances = []
+        for train, test in kf.split(X, y):
+            X_train, X_test, y_train, y_test = X[train], X[test], y[train], y[test]
+
+            rf = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", n_estimators=n_estimators, random_state=random_state)
+
+            rf.fit(X_train, y_train)
+
+            importances.append(rf.feature_importances_)
+            cv_scores.append(f1_score(rf, X_test, y_test))
+
+        mean_score = np.mean(cv_scores)
+
+        if mean_score - prev_score > increase_threshold:
+            num_features = i + 1
+        else:
+            break
+
+        prev_score = mean_score
+
+    return num_features
+
+def confusion_matrix(model, X, y, labels):
     y = np.array(y)
 
     y_pred = model.predict(X)
@@ -129,3 +177,16 @@ def score(model, X, y, labels):
     cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
 
     return cm
+
+def f1_score(model, X, y):
+    y = np.array(y)
+
+    y_pred = model.predict(X)
+
+    encoder = sklearn.preprocessing.LabelEncoder()
+    encoder.fit(np.concatenate([y, y_pred]))
+
+    y = encoder.transform(y)
+    y_pred = encoder.transform(y_pred)
+
+    return sklearn.metrics.f1_score(y, y_pred)

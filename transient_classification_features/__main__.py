@@ -11,10 +11,12 @@ def main():
     category_col = "category"
     matrix_file = "site/index.html"
 
+    category_minimum = 70
+
     # List incomplete and should be changed as needed
     features_cols = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
-        ,  "pa", "lc_flux_asymmetry", "chi_2", "iqr"
-        ,  "roms", "ptpv", "skewness", "kurtosis", "ampl", "stetson_I", "stetson_K"
+        ,  "pa", "lc_flux_asymmetry", "chi_2", "iqr", "fpr20", "fpr35", "fpr50", "fpr65", "fpr80"
+        ,  "roms", "ptpv", "skewness", "kurtosis", "ampl", "stetson_I", "stetson_J", "stetson_K"
         ,  "cum_sum"
         ,  "neumann_eta", "residual_br_fa_ratio", "shapiro_wilk", "slopes_10per"
         ,  "slopes_90per", "abv_1std", "abv_1std_slopes", "bel_1std", "bel_1std_slopes"
@@ -31,10 +33,22 @@ def main():
     if size_before > size_after:
         print("%d points removed due to missing feature values." % (size_before - size_after))
 
+    categories = data[category_col].unique()
+
+    category_info = data.groupby(category_col).count()[features_cols[0]]
+    good_categories = category_info.index[np.array(category_info) > category_minimum]
+
+    good_categories = [x for x in categories if x in good_categories]
+
+    num_removed_categories = len(categories) - len(good_categories)
+    if num_removed_categories > 0:
+        print("Removed %d categories with less than %d instances." % (num_removed_categories, category_minimum))
+
+    data = data[data[category_col].isin(good_categories)]
+
     matrix = compairisons.feature_matrix(category_col, features_cols, data)
 
-    categories = data[category_col].unique()
-    write_html_matrix(matrix, categories, matrix_file)
+    write_html_matrix(matrix, good_categories, matrix_file)
 
     print("")
     print("")
@@ -104,6 +118,13 @@ def html_matrix(matrix, categories):
                 table += "<div>"
                 table += create_confusion_matrix(score_1)
                 table += create_confusion_matrix(score_2)
+                table += "</div>"
+
+                a_examples = matrix[comb][3]
+                b_examples = matrix[comb][4]
+
+                table += "<div>"
+                table += "%d ~ %d" % (a_examples, b_examples)
                 table += "</div>"
 
                 table += "<br />".join(features)
