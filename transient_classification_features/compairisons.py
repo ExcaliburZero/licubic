@@ -13,14 +13,11 @@ def feature_matrix(category_col, features_cols, data):
 
     combinations = list(itertools.combinations_with_replacement(categories, 2))
 
-    print(combinations)
-
     calculations = []
     for (a, b) in combinations:
         calc = delayed(compute_cell)(category_col, features_cols, data, a, b)
         calculations.append(calc)
 
-    #cells = [compute_cell(category_col, features_cols, data, a, b) for (a, b) in combinations]
     cells = delayed(calculations).compute()
 
     matrix = {}
@@ -29,7 +26,7 @@ def feature_matrix(category_col, features_cols, data):
 
     return matrix
 
-def rank_features(matrix):
+def rank_features(matrix, features):
     best_features = []
     for key in matrix:
         entry = matrix[key]
@@ -38,6 +35,10 @@ def rank_features(matrix):
             best_features.append(f[0])
 
     features_ranking = {x: best_features.count(x) for x in best_features}
+
+    for f in features:
+        if f not in features_ranking:
+            features_ranking[f] = 0
 
     return sorted(features_ranking.items(), key=operator.itemgetter(1))[::-1]
 
@@ -53,7 +54,8 @@ def a_against_all(category_col, features_cols, data, a):
     is_a_col = "is_a"
     new_data[is_a_col] = new_data[category_col].map(lambda x: x == a)
 
-    features_and_score = calculate_features(is_a_col, features_cols, new_data)
+    labels = [True, False]
+    features_and_score = calculate_features(is_a_col, features_cols, new_data, labels)
 
     print(a + " vs ~" + a)
 
@@ -62,29 +64,23 @@ def a_against_all(category_col, features_cols, data, a):
 def a_against_b(category_col, features_cols, data, a, b):
     new_data = data[data[category_col].isin([a, b])]
 
-    features_and_score = calculate_features(category_col, features_cols, new_data)
+    labels = [a, b]
+    features_and_score = calculate_features(category_col, features_cols, new_data, labels)
 
     print(a + " vs " + b)
 
     return features_and_score
 
-def calculate_features(category_col, features_cols, data):
+def calculate_features(category_col, features_cols, data, labels):
     test_size = 0.2
     n_best = 3
     random_state = 42
 
     X = data.as_matrix(features_cols)
-    y = data[category_col]
+    y = np.array(data[category_col])
 
-    X_train, X_test, y_train, y_test = sklearn.model_selection.train_test_split(
-        X, y, test_size=test_size, random_state=random_state)
+    score_1, importances = get_feature_importances(X, y, labels)
 
-    rf = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", random_state=random_state)
-    rf.fit(X_train, y_train)
-
-    score_1 = score(rf, X_test, y_test)
-
-    importances = rf.feature_importances_
     feature_indexes = np.argsort(importances)[::-1][:n_best]
 
     best_features = np.array(features_cols)[feature_indexes]
@@ -92,27 +88,44 @@ def calculate_features(category_col, features_cols, data):
     best_features_info = list(zip(best_features, importances[feature_indexes]))
 
     X_2 = data.as_matrix(best_features)
-    y_2 = data[category_col]
+    y_2 = y
 
-    X_train_2, X_test_2, y_train_2, y_test_2 = sklearn.model_selection.train_test_split(
-        X_2, y_2, test_size=test_size, random_state=random_state)
-
-    rf_2 = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", random_state=random_state)
-    rf_2.fit(X_train_2, y_train_2)
-
-    score_2 = score(rf_2, X_test_2, y_test_2)
+    score_2, _ = get_feature_importances(X_2, y_2, labels)
 
     return best_features_info, score_1, score_2
 
-def score(model, X, y):
+def get_feature_importances(X, y, labels):
+    n_estimators = 10
+    random_state = 42
+    cv = 2
+    shuffle = True
+
+    kf = sklearn.model_selection.StratifiedKFold(n_splits=cv, shuffle=shuffle, random_state=random_state)
+    cv_scores = []
+    importances = []
+    for train, test in kf.split(X, y):
+        X_train, X_test, y_train, y_test = X[train], X[test], y[train], y[test]
+
+        rf = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", n_estimators=n_estimators, random_state=random_state)
+
+        rf.fit(X_train, y_train)
+
+        importances.append(rf.feature_importances_)
+        cv_scores.append(score(rf, X_test, y_test, labels))
+
+    mean_score = np.mean(cv_scores, axis=0)
+
+    importances = np.array(importances)
+    importances = np.mean(importances, axis=0)
+
+    return mean_score, importances
+
+def score(model, X, y, labels):
     y = np.array(y)
 
     y_pred = model.predict(X)
 
-    encoder = sklearn.preprocessing.LabelEncoder()
-    encoder.fit(np.concatenate([y, y_pred]))
+    cm = sklearn.metrics.confusion_matrix(y, y_pred, labels=labels)
+    cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
 
-    y = encoder.transform(y)
-    y_pred = encoder.transform(y_pred)
-
-    return sklearn.metrics.f1_score(y, y_pred)
+    return cm
