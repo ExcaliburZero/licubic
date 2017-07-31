@@ -16,7 +16,7 @@ def main():
     # List incomplete and should be changed as needed
     features_cols = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
         ,  "pa", "lc_flux_asymmetry", "chi_2", "iqr", "fpr20", "fpr35", "fpr50", "fpr65", "fpr80"
-        ,  "roms", "ptpv", "skewness", "kurtosis", "ampl", "stetson_I", "stetson_J", "stetson_K"
+        ,  "roms", "ptpv", "skewness", "kurtosis", "ampl", "stetson_I", "stetson_J", "stetson_K", "pst", "pdfp", "sk"
         ,  "cum_sum"
         ,  "neumann_eta", "residual_br_fa_ratio", "shapiro_wilk", "slopes_10per"
         ,  "slopes_90per", "abv_1std", "abv_1std_slopes", "bel_1std", "bel_1std_slopes"

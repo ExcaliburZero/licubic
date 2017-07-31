@@ -123,7 +123,8 @@ def get_feature_importances(X, y, labels):
     mean_score = np.mean(cv_scores, axis=0)
 
     importances = np.array(importances)
-    importances = np.mean(importances, axis=0)
+    #importances = np.mean(importances, axis=0)
+    importances = importances[0]
 
     return mean_score, importances
 
@@ -133,7 +134,7 @@ def choose_num_features(data, category_col, sorted_features_cols):
     cv = 5
     shuffle = True
 
-    increase_threshold = 0.05
+    increase_threshold = 0.03#0.05
 
     y = np.array(data[category_col])
 
