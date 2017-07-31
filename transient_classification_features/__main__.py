@@ -3,8 +3,10 @@ import compairisons
 import itertools
 import numpy as np
 import pandas as pd
+import pickle
 import pystache
 import sys
+import datetime
 
 def main():
     data_file = sys.argv[1]
@@ -46,13 +48,21 @@ def main():
 
     data = data[data[category_col].isin(good_categories)]
 
-    matrix = compairisons.feature_matrix(category_col, features_cols, data)
+    matrix, classifiers = compairisons.feature_matrix(category_col, features_cols, data)
 
     write_html_matrix(matrix, good_categories, matrix_file)
 
     print("")
     print("")
     print(list_best_features(matrix, features_cols))
+
+    date_time = str(datetime.datetime.now())
+    classifiers_file = "data/classifiers_" + date_time + ".pickle"
+    save_classifiers(classifiers_file, classifiers)
+
+def save_classifiers(classifiers_file, classifiers):
+    with open(classifiers_file, "wb") as f:
+        pickle.dump(classifiers, f)
 
 def print_matrix(matrix):
     for key in matrix:

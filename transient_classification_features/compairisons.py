@@ -18,13 +18,16 @@ def feature_matrix(category_col, features_cols, data):
         calc = delayed(compute_cell)(category_col, features_cols, data, a, b)
         calculations.append(calc)
 
-    cells = delayed(calculations).compute()
+    info = delayed(calculations).compute()
 
     matrix = {}
-    for i in range(len(cells)):
-        matrix[combinations[i]] = cells[i]
+    classifiers = {}
+    print(info)
+    for i in range(len(info)):
+        matrix[combinations[i]] = info[i][0]
+        classifiers[combinations[i]] = info[i][1]
 
-    return matrix
+    return matrix, classifiers
 
 def rank_features(matrix, features):
     best_features = []
@@ -55,21 +58,21 @@ def a_against_all(category_col, features_cols, data, a):
     new_data[is_a_col] = new_data[category_col].map(lambda x: x == a)
 
     labels = [True, False]
-    features_and_score = calculate_features(is_a_col, features_cols, new_data, labels)
+    features_score_classifiers = calculate_features(is_a_col, features_cols, new_data, labels)
 
     print(a + " vs ~" + a)
 
-    return features_and_score
+    return features_score_classifiers
 
 def a_against_b(category_col, features_cols, data, a, b):
     new_data = data[data[category_col].isin([a, b])]
 
     labels = [a, b]
-    features_and_score = calculate_features(category_col, features_cols, new_data, labels)
+    features_score_classifiers = calculate_features(category_col, features_cols, new_data, labels)
 
     print(a + " vs " + b)
 
-    return features_and_score
+    return features_score_classifiers
 
 def calculate_features(category_col, features_cols, data, labels):
     test_size = 0.2
@@ -99,7 +102,10 @@ def calculate_features(category_col, features_cols, data, labels):
     a_examples = len(data[data[category_col] == labels[0]])
     b_examples = len(data[data[category_col] == labels[1]])
 
-    return best_features_info, score_1, score_2, a_examples, b_examples
+    model = create_final_classifier(X_2, y_2)
+    classifier = (best_features, model)
+
+    return (best_features_info, score_1, score_2, a_examples, b_examples), classifier
 
 def get_feature_importances(X, y, labels):
     n_estimators = 10
@@ -168,6 +174,16 @@ def choose_num_features(data, category_col, sorted_features_cols):
         prev_score = mean_score
 
     return num_features
+
+def create_final_classifier(X, y):
+    n_estimators = 10
+    random_state = 42
+
+    rf = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", n_estimators=n_estimators, random_state=random_state)
+
+    rf.fit(X, y)
+
+    return rf
 
 def confusion_matrix(model, X, y, labels):
     y = np.array(y)
