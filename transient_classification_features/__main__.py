@@ -8,6 +8,9 @@ import pystache
 import sys
 import datetime
 
+RED_CELL_UPPER = 0.50
+YELLOW_CELL_UPPER = 0.80
+
 def main():
     data_file = sys.argv[1]
     category_col = "category"
@@ -117,17 +120,26 @@ def html_matrix(matrix, categories):
         table += "<tr>"
         table += "<th>" + a + "</th>"
         for b in categories:
-            table += "<td>"
-
             comb = (a, b)
             if comb in matrix:
                 features = np.array(matrix[comb][0])[:,0]
-                score_1 = matrix[comb][1]
-                score_2 = matrix[comb][2]
+                cm_1 = matrix[comb][1]
+                cm_2 = matrix[comb][2]
+                score = matrix[comb][5]
+
+                cell_color = "cell-"
+                if score < RED_CELL_UPPER:
+                    cell_color += "red"
+                elif score < YELLOW_CELL_UPPER:
+                    cell_color += "yellow"
+                else:
+                    cell_color += "green"
+
+                table += "<td class='" + cell_color + "'>"
 
                 table += "<div>"
-                table += create_confusion_matrix(score_1)
-                table += create_confusion_matrix(score_2)
+                table += create_confusion_matrix(cm_1)
+                table += create_confusion_matrix(cm_2)
                 table += "</div>"
 
                 a_examples = matrix[comb][3]
@@ -138,6 +150,8 @@ def html_matrix(matrix, categories):
                 table += "</div>"
 
                 table += "<br />".join(features)
+            else:
+                table += "<td>"
 
             table += "</td>"
         table += "</tr>"

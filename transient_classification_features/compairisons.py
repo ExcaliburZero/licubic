@@ -81,7 +81,7 @@ def calculate_features(category_col, features_cols, data, labels):
     X = data.as_matrix(features_cols)
     y = np.array(data[category_col])
 
-    score_1, importances = get_feature_importances(X, y, labels)
+    cm_1, importances, _ = get_feature_importances(X, y, labels)
 
     feature_indexes = np.argsort(importances)[::-1]
     sorted_features_cols = np.array(features_cols)[feature_indexes]
@@ -97,7 +97,7 @@ def calculate_features(category_col, features_cols, data, labels):
     X_2 = data.as_matrix(best_features)
     y_2 = y
 
-    score_2, _ = get_feature_importances(X_2, y_2, labels)
+    cm_2, _, cv_score = get_feature_importances(X_2, y_2, labels)
 
     a_examples = len(data[data[category_col] == labels[0]])
     b_examples = len(data[data[category_col] == labels[1]])
@@ -105,7 +105,7 @@ def calculate_features(category_col, features_cols, data, labels):
     model = create_final_classifier(X_2, y_2)
     classifier = (best_features, model)
 
-    return (best_features_info, score_1, score_2, a_examples, b_examples), classifier
+    return (best_features_info, cm_1, cm_2, a_examples, b_examples, cv_score), classifier
 
 def get_feature_importances(X, y, labels):
     n_estimators = 10
@@ -114,6 +114,7 @@ def get_feature_importances(X, y, labels):
     shuffle = True
 
     kf = sklearn.model_selection.KFold(n_splits=cv, shuffle=shuffle, random_state=random_state)
+    cv_cms = []
     cv_scores = []
     importances = []
     for train, test in kf.split(X, y):
@@ -124,15 +125,16 @@ def get_feature_importances(X, y, labels):
         rf.fit(X_train, y_train)
 
         importances.append(rf.feature_importances_)
-        cv_scores.append(confusion_matrix(rf, X_test, y_test, labels))
+        cv_cms.append(confusion_matrix(rf, X_test, y_test, labels))
+        cv_scores.append(f1_score(rf, X_test, y_test))
 
-    mean_score = np.mean(cv_scores, axis=0)
+    mean_cm = np.mean(cv_cms, axis=0)
+    mean_score = np.mean(cv_scores)
 
     importances = np.array(importances)
-    #importances = np.mean(importances, axis=0)
     importances = importances[0]
 
-    return mean_score, importances
+    return mean_cm, importances, mean_score
 
 def choose_num_features(data, category_col, sorted_features_cols):
     n_estimators = 10

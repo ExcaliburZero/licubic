@@ -31,3 +31,14 @@ thead {
     padding: 3px;
 }
 
+.cell-red {
+    background-color: #e74c3c !important;
+}
+
+.cell-yellow {
+    background-color: #f1c40f !important;
+}
+
+.cell-green {
+    background-color: #2ecc71 !important;
+}
