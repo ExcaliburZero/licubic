@@ -1,0 +1,33 @@
+table{
+    table-layout: fixed;
+}
+
+th, td {
+    border: 1px solid black;
+    width: 130px;
+    width: 150px;
+    padding: 5px;
+}
+
+thead {
+    background: black;
+    color: white;
+}
+
+.cm {
+    display: inline;
+    margin: 5px;
+}
+
+.cm-row {
+    display: table-row;
+    width: auto;
+    clear: both;
+    height: 25px;
+}
+
+.cm-cell {
+    display: inline;
+    padding: 3px;
+}
+
