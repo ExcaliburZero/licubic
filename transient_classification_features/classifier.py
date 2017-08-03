@@ -1,4 +1,5 @@
 import collections
+import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -38,7 +39,8 @@ def main():
     y = np.array(data[category_col])
     y_pred = predictions
 
-    filepath = "cm.svg"
+    date_time = str(datetime.datetime.now())
+    filepath = "cm_%s.svg" % date_time
     save_confusion_matrix(y, y_pred, filepath, data, category_col, classifier)
 
 def remove_partial_entries(data):
