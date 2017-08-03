@@ -40,9 +40,9 @@ def process_data(data, star_id_col, period_col, curves_dir, save_curve_files=Fal
 
 def add_feature_columns(data):
     columns = ["ampl", "lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
-        ,  "pa", "totvar", "quadvar", "fslope", "lc_rms"
+        ,  "pa", "pst", "pdfp", "sk", "fpr20", "fpr35", "fpr50", "fpr65", "fpr80", "totvar", "quadvar", "fslope", "lc_rms"
         ,  "lc_flux_asymmetry", "sm_phase_rms", "periodicity", "chi_2", "iqr"
-        ,  "roms", "ptpv", "stetson_I", "stetson_K", "fourier_amplitude", "R_21", "R_31", "f_phase"
+        ,  "roms", "ptpv", "stetson_I", "stetson_K", "stetson_J", "fourier_amplitude", "R_21", "R_31", "f_phase"
         ,  "phi_21", "phi_31", "skewness", "kurtosis", "residual_br_fa_ratio"
         ,  "shapiro_wilk", "slopes_10per", "slopes_90per", "cum_sum"
         ,  "neumann_eta", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
@@ -175,9 +175,9 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     #    ,  "neumann_eta", "crosses", "abv_1std", "bel_1std", "abv_1std_slopes"
     #    ,  "bel_1std_slopes", "num_obs"
     columns = ["ampl", "lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
-        ,  "pa"
+        ,  "pa", "pst", "pdfp", "sk", "fpr20", "fpr35", "fpr50", "fpr65", "fpr80"
         ,  "lc_flux_asymmetry", "chi_2", "iqr"
-        ,  "roms", "ptpv", "stetson_I", "stetson_K", "skewness", "kurtosis", "residual_br_fa_ratio"
+        ,  "roms", "ptpv", "stetson_I", "stetson_K", "stetson_J", "skewness", "kurtosis", "residual_br_fa_ratio"
         ,  "shapiro_wilk", "slopes_10per", "slopes_90per", "cum_sum"
         ,  "neumann_eta", "abv_1std", "bel_1std", "abv_1std_slopes"
         ,  "bel_1std_slopes", "num_obs"
@@ -191,6 +191,7 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     errors_dirty = light_curve[:,2]
 
     times, magnitudes, errors = clean_light_curve(times_dirty, magnitudes_dirty, errors_dirty)
+    fluxes = magnitudes_to_fluxes(magnitudes)
 
     num_obs = times.shape[0]
     slopes = curve_slopes(times, magnitudes)
@@ -212,7 +213,16 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     std = np.std(magnitudes)
     mad = median_absolute_deviation(magnitudes)
     mbrp = median_buffer_range_percentage(magnitudes)
-    pa = percent_amplitude(magnitudes)
+    pa = percent_amplitude(fluxes)
+    pst = pair_slope_trend(times, fluxes)
+    pdfp = percent_difference_flux_percentile(fluxes)
+    sk = small_kurtosis(magnitudes)
+
+    fpr20 = flux_percentage_ratio(fluxes, 40, 60, 5, 95)
+    fpr35 = flux_percentage_ratio(fluxes, 32.5, 67.5, 5, 95)
+    fpr50 = flux_percentage_ratio(fluxes, 25, 75, 5, 95)
+    fpr65 = flux_percentage_ratio(fluxes, 17.5, 82.5, 5, 95)
+    fpr80 = flux_percentage_ratio(fluxes, 10, 90, 5, 95)
 
     #totvar = total_variation(sm_phase_magnitudes)
     #quadvar = total_variation(sm_phase_magnitudes)
@@ -228,6 +238,7 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     roms = robust_median_statistic(magnitudes, errors)
     ptpv = peak_to_peak_variability(magnitudes, errors)
     stetson_I = welch_stetson_I(magnitudes, errors)
+    stetson_J = welch_stetson_J(magnitudes, errors)
     stetson_K = welch_stetson_K(magnitudes, errors)
 
     #fourier_order = 3
@@ -267,9 +278,9 @@ def extract_features(data, star_id_col, period_col, light_curve, curves_dir, sav
     #    ,  abv_1std, bel_1std, abv_1std_slopes, bel_1std_slopes, num_obs
     #    ]
     new_data[columns] = [ampl, lt, mr, ms, b1std, rcb, std, mad, mbrp
-        ,  pa
+        ,  pa, pst, pdfp, sk, fpr20, fpr35, fpr50, fpr65, fpr80
         ,  lc_flux_asymmetry, chi_2, iqr
-        ,  roms, ptpv, stetson_I, stetson_K, skewness, kurtosis, residual_br_fa_ratio, shapiro_wilk
+        ,  roms, ptpv, stetson_I, stetson_K, stetson_J, skewness, kurtosis, residual_br_fa_ratio, shapiro_wilk
         ,  slopes_10per, slopes_90per, cum_sum, neumann_eta
         ,  abv_1std, bel_1std, abv_1std_slopes, bel_1std_slopes, num_obs
         ]
@@ -322,6 +333,11 @@ def save_curve(curves_dir, star_id, curve_name, times, magnitudes, columns):
     curve_path = get_curve_path(curves_dir, "%s_%s" % (star_id, curve_name))
 
     curve.to_csv(curve_path, index=False)
+
+def magnitudes_to_fluxes(magnitudes):
+    fluxes = 10.0 ** (-0.4 * magnitudes)
+
+    return fluxes
 
 def amplitude(magnitudes):
     """
@@ -562,6 +578,48 @@ def percent_amplitude(magnitudes):
     min_diff = np.min(magnitudes) - median
 
     return max(max_diff, min_diff)
+
+def pair_slope_trend(times, fluxes):
+    flux_slopes = curve_slopes(times, fluxes)
+
+    last_30_slopes = flux_slopes[-30:]
+
+    pst = last_30_slopes[last_30_slopes > 0.0].shape[0]
+
+    return pst
+
+def percent_difference_flux_percentile(fluxes):
+    median_flux = np.median(fluxes)
+
+    pdfp = flux_percentile(fluxes, 5, 95)
+
+    return pdfp
+
+def small_kurtosis(magnitudes):
+    mean_mag = np.mean(magnitudes)
+    n = magnitudes.shape[0]
+
+    s = np.sqrt(np.sum(np.square(magnitudes - mean_mag)) / (n - 1))
+
+    #nm = n * (n + 1) * np.sum(np.power((magnitudes - mean_mag) / s, 4))
+    #dm = (n - 1) * (n - 2) * (n - 3) - ((3 * (n - 1) * (n - 1)) / ((n - 2) * (n - 3)))
+
+    a = (n * (n - 1)) / ((n - 1) * (n - 2) * (n - 3))
+    b = np.sum(np.power((magnitudes - mean_mag) / s, 4))
+    c = (3 * np.square(n - 1)) / ((n - 2) * (n - 3))
+
+    sk = (a * b) - c
+
+    return sk
+
+def flux_percentile(fluxes, n, m):
+    flux_n = np.percentile(fluxes, n)
+    flux_m = np.percentile(fluxes, m)
+
+    return flux_m - flux_n
+
+def flux_percentage_ratio(fluxes, a, b, c, d):
+    return flux_percentile(fluxes, a, b) / flux_percentile(fluxes, c, d)
 
 def total_variation(magnitudes):
     """
@@ -938,6 +996,17 @@ def welch_stetson_I(magnitudes, errors):
 
     return stetson_I
 
+def welch_stetson_J(magnitudes, errors):
+    w = 1.0 / errors
+
+    num_obs = magnitudes.shape[0]
+    mean_mag = np.mean(magnitudes)
+    p_k = num_obs / (num_obs - 1) * np.square((magnitudes - mean_mag) / errors) - 1
+
+    stetson_J = np.sum(w * np.sign(p_k) * np.sqrt(np.absolute(p_k))) / np.sum(w)
+
+    return stetson_J
+
 def welch_stetson_K(magnitudes, errors):
     num_obs = magnitudes.shape[0]
 
@@ -951,6 +1020,15 @@ def welch_stetson_K(magnitudes, errors):
     stetson_K = b / c
 
     return stetson_K
+
+#def welch_stetson_L(stetson_J, stetson_K, errors):
+#    w = 1.0 / errors
+#
+#    weight_ratio = ???
+#
+#    stetson_L = np.sqrt(np.pi / 2.0) * stetson_J * stetson_K * weight_ratio
+#
+#    return stetson_L
 
 def fourier_decomposition(times, magnitudes, order):
     """
