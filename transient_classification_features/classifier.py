@@ -26,57 +26,75 @@ def main():
         ]
 
     category_col = "category"
-    #data = data[features_cols]
     data = data[features_cols + [category_col]]
 
+    data = remove_partial_entries(data)
+
+    category_minimum = 0
+    data = remove_small_categories(data, category_col, features_cols, category_minimum)
+
+    predictions = classifier.predict(data)
+
+    y = np.array(data[category_col])
+    y_pred = predictions
+
+    filepath = "cm.svg"
+    save_confusion_matrix(y, y_pred, filepath, data, category_col, classifier)
+
+def remove_partial_entries(data):
     size_before = len(data)
     data = data.dropna()
     size_after = len(data)
 
-    #n_samples = 100
-    #data = data.iloc[:n_samples]
-
     if size_before > size_after:
         print("%d points removed due to missing feature values." % (size_before - size_after))
 
-    predictions = classifier.predict(data)
+    return data
 
-    prediction_col = "predicted"
-    data[prediction_col] = predictions
+def remove_small_categories(data, category_col, features_cols, category_minimum):
+    categories = data[category_col].unique()
 
-    y = np.array(data[category_col])
-    y_pred = np.array(data[prediction_col])
-    #print("")
-    #print(sklearn.metrics.accuracy_score(y, y_pred))
+    category_info = data.groupby(category_col).count()[features_cols[0]]
+    good_categories = category_info.index[np.array(category_info) > category_minimum]
 
-    print(data[[category_col, prediction_col]])
+    good_categories = [x for x in categories if x in good_categories]
 
-    #print("")
-    #print(sklearn.metrics.classification_report(y, y_pred))
+    num_removed_categories = len(categories) - len(good_categories)
+    if num_removed_categories > 0:
+        print("Removed %d categories with less than %d instances." % (num_removed_categories, category_minimum))
 
-    #print(data[[category_col, prediction_col]])
+    data = data[data[category_col].isin(good_categories)]
 
-    print("")
-    print("Unknown: ", len(data[data[prediction_col] == "Unknown"]))
+    return data
 
-    sciplt.plotters.plot_confusion_matrix(y, y_pred, hide_zeros=True, normalize=True, x_tick_rotation=90, title_fontsize="large", text_fontsize="large")
-    plt.show()
+def save_confusion_matrix(y, y_pred, filepath, data, category_col, classifier):
+    true_cats = np.array(data[category_col].unique())
+    pred_cats = np.array(classifier.categories + [classifier.unknown])
 
-    categories = classifier.categories
-    probabilities = classifier.get_class_probabilities(data)
-    
-    for i in range(probabilities.shape[1]):
-        X = probabilities[:,i]
+    labels = np.sort(np.unique(np.concatenate([true_cats, pred_cats])))
+    true_labels = np.where(np.isin(labels, true_cats))
+    pred_labels = np.where(np.isin(labels, pred_cats))
 
-        category = categories[i]
+    #sns.set_context("talk", font_scale=2.2)
+    #figsize = (54, 38)
+    figsize = (20, 16)
 
-        #sns.kdeplot(X, bw=0.005)
-        plt.hist(X, bins=25)
-        plt.xlim([0.0, 1.0])
-        plt.title(category)
-        #plt.show()
-        plt.savefig("data/faraway_" + category + ".png")
-        plt.close()
+    #normalize = "percent"
+    normalize = True
+    ax = sciplt.plotters.plot_confusion_matrix(y, y_pred, hide_zeros=True, normalize=normalize, x_tick_rotation=90, title_fontsize="large", text_fontsize="large", true_label_indexes=true_labels, pred_label_indexes=pred_labels, labels=labels, figsize=figsize)
+    for text in ax.texts:
+        #text.set_weight('bold')
+        #text.set_fontsize(80)
+        text.set_fontsize(20)
+    #for text in ax.xaxis.get_ticklabels():
+    #    text.set_weight('bold')
+    #for text in ax.yaxis.get_ticklabels():
+    #    text.set_weight('bold')
+    #ax.xaxis.label.set_weight('bold')
+    #ax.yaxis.label.set_weight('bold')
+    #ax.title.set_weight('bold')
+    #plt.show()
+    plt.savefig(filepath)
 
 def create_classifier(classifiers_file):
     binary_classifiers = load_binary_classifiers(classifiers_file)
@@ -99,6 +117,9 @@ def get_a_versus_not_a(binary_classifiers):
     for binary in wanted_binaries:
         classifier = binary_classifiers[binary]
         a_vs_not_a[binary] = classifier
+
+    key_order = sorted(a_vs_not_a.keys())
+    a_vs_not_a = collections.OrderedDict((k, a_vs_not_a[k]) for k in key_order)
 
     return a_vs_not_a
 
