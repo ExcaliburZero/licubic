@@ -42,6 +42,7 @@ The confusion matrix and the list of best overall features will be saved in the 
 ## Bugs / Tweaks
 * There is currently a [bug](https://github.com/scikit-learn/scikit-learn/issues/7346) in scikit-learn (v 0.18.1) that makes `RandomForestClassifier`s not threadsafe. This causes issues when multiple classifiers are trained in paralel,specifically it raises the following exception `IndexError: pop from empty list`. The current workaround needed for this application is to edit the `sklearn/base.py` file and replace line 248 with `pass`.
 * For the classifier you will need a patched version of `scikit-plot` that includes some special features. You can install the patched version by running the following commands.
+
 ```
 $ cd ..
 $ git clone git@github.com:ExcaliburZero/scikit-plot.git
