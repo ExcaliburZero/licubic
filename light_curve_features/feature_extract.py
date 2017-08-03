@@ -10,8 +10,9 @@ import math
 import numpy as np
 import pandas as pd
 import scipy.stats as ss
+import sys
 
-def process_data(data, star_id_col, period_col, curves_dir, save_curve_files=False):
+def process_data(data, star_id_col, period_col, curves_dir, time_col, mag_col, err_col, save_curve_files=False):
     """
     Extracts additional features from the stars in the given data file using
     their light curves and existing features.
@@ -33,7 +34,7 @@ def process_data(data, star_id_col, period_col, curves_dir, save_curve_files=Fal
     data = add_feature_columns(data)
 
     extract_func = partial(extract_with_curve, curves_dir, save_curve_files
-            , star_id_col, period_col)
+            , star_id_col, period_col, time_col, mag_col, err_col)
     new_data = data.apply(extract_func, axis=1)
 
     return new_data
@@ -52,7 +53,7 @@ def add_feature_columns(data):
 
     return new_data
 
-def extract_with_curve(curves_dir, save_curve_files, star_id_col, period_col, data):
+def extract_with_curve(curves_dir, save_curve_files, star_id_col, period_col, time_col, mag_col, err_col, data):
     """
     Extracts the features from the given star's data with its light curve.
 
@@ -79,7 +80,8 @@ def extract_with_curve(curves_dir, save_curve_files, star_id_col, period_col, da
     curve_path = get_curve_path(curves_dir, star_id)
 
     if path.exists(curve_path):
-        curve = get_curve(curve_path)
+        #curve = get_curve(curve_path)
+        curve = get_curve_simple(curve_path, time_col, mag_col, err_col)
 
         return extract_features(data, star_id_col, period_col, curve, curves_dir, save_curve_files)
     else:
@@ -132,6 +134,21 @@ def get_curve(curve_path):
         parts = [line.split(",")[0:4] for line in lines]
 
         return np.array(parts[1:-1], dtype="float64")
+
+def get_curve_simple(curve_path, time_col, mag_col, err_col):
+    curve = pd.read_csv(curve_path)
+
+    curve_matrix = curve.as_matrix([time_col, mag_col, err_col])
+
+    if curve_matrix.shape[1] != 3:
+        message = "One or more column names for the light curve files are incorrect.\n"
+        message += "time=%s\n" % time_col
+        message += "mag=%s\n" % mag_col
+        message += "err=%s" % err_col
+        print(message, file=sys.stderr)
+        sys.exit(1)
+
+    return curve_matrix
 
 def extract_features(data, star_id_col, period_col, light_curve, curves_dir, save_curve_files):
     """

@@ -33,6 +33,7 @@ def main():
             "id",
             "period",
             args.curves_dir,
+            args.time_col, args.mag_col, args.err_col,
             save_curve_files=args.save_curve_files
         )
 
@@ -75,6 +76,15 @@ def create_arg_parser():
     parser.add_argument("--category-col", dest="category_col", type=str,
             default="category",
             help="the name of the column that contains the star category")
+    parser.add_argument("--time-col", dest="time_col", type=str,
+            default="time",
+            help="the name of the column in the curve files that contains the MJD time")
+    parser.add_argument("--mag-col", dest="mag_col", type=str,
+            default="mag",
+            help="the name of the column in the curve files that contains the magnitude")
+    parser.add_argument("--err-col", dest="err_col", type=str,
+            default="magerr",
+            help="the name of the column in the curve files that contains the magnitude error")
 
     return parser
 
