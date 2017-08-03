@@ -17,6 +17,7 @@ def main():
     matrix_file = "site/index.html"
 
     category_minimum = 70
+    balanced = False
 
     # List incomplete and should be changed as needed
     features_cols = ["lt", "mr", "ms", "b1std", "rcb", "std", "mad", "mbrp"
@@ -28,9 +29,25 @@ def main():
         ]
 
     data = pd.read_csv(data_file)
-
     data = data[[category_col] + features_cols]
 
+    data = remove_partial_entries(data)
+
+    data, good_categories = remove_small_categories(data, category_col, features_cols, category_minimum)
+
+    matrix, classifiers = compairisons.feature_matrix(category_col, features_cols, data, balanced=balanced)
+
+    write_html_matrix(matrix, good_categories, matrix_file)
+
+    date_time = str(datetime.datetime.now())
+
+    features_file = "data/best_features_" + date_time + ".txt"
+    save_best_features(matrix, features_cols, features_file)
+
+    classifiers_file = "data/classifiers_" + date_time + ".pickle"
+    save_classifiers(classifiers_file, classifiers)
+
+def remove_partial_entries(data):
     size_before = len(data)
     data = data.dropna()
     size_after = len(data)
@@ -38,6 +55,9 @@ def main():
     if size_before > size_after:
         print("%d points removed due to missing feature values." % (size_before - size_after))
 
+    return data
+
+def remove_small_categories(data, category_col, features_cols, category_minimum):
     categories = data[category_col].unique()
 
     category_info = data.groupby(category_col).count()[features_cols[0]]
@@ -51,17 +71,7 @@ def main():
 
     data = data[data[category_col].isin(good_categories)]
 
-    matrix, classifiers = compairisons.feature_matrix(category_col, features_cols, data)
-
-    write_html_matrix(matrix, good_categories, matrix_file)
-
-    print("")
-    print("")
-    print(list_best_features(matrix, features_cols))
-
-    date_time = str(datetime.datetime.now())
-    classifiers_file = "data/classifiers_" + date_time + ".pickle"
-    save_classifiers(classifiers_file, classifiers)
+    return data, good_categories
 
 def save_classifiers(classifiers_file, classifiers):
     with open(classifiers_file, "wb") as f:
@@ -147,6 +157,7 @@ def html_matrix(matrix, categories):
 
                 table += "<div>"
                 table += "%d ~ %d" % (a_examples, b_examples)
+                table += "<br />%f" % score
                 table += "</div>"
 
                 table += "<br />".join(features)
@@ -197,6 +208,11 @@ def list_best_features(matrix, features):
         lines += f + " = " + str(v) + "\n"
 
     return lines
+
+def save_best_features(matrix, features_cols, filepath):
+    contents = list_best_features(matrix, features_cols)
+
+    write_file(filepath, contents)
 
 if __name__ == "__main__":
     main()

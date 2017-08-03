@@ -3,26 +3,26 @@ from dask import delayed
 import itertools
 import numpy as np
 import operator
+import pandas as pd
 import sklearn.ensemble
 import sklearn.model_selection
 import sklearn.metrics
 import sklearn.preprocessing
 
-def feature_matrix(category_col, features_cols, data):
+def feature_matrix(category_col, features_cols, data, balanced=False):
     categories = data[category_col].unique()
 
     combinations = list(itertools.combinations_with_replacement(categories, 2))
 
     calculations = []
     for (a, b) in combinations:
-        calc = delayed(compute_cell)(category_col, features_cols, data, a, b)
+        calc = delayed(compute_cell)(category_col, features_cols, data, a, b, balanced)
         calculations.append(calc)
 
     info = delayed(calculations).compute()
 
     matrix = {}
     classifiers = {}
-    print(info)
     for i in range(len(info)):
         matrix[combinations[i]] = info[i][0]
         classifiers[combinations[i]] = info[i][1]
@@ -45,38 +45,58 @@ def rank_features(matrix, features):
 
     return sorted(features_ranking.items(), key=operator.itemgetter(1))[::-1]
 
-def compute_cell(category_col, features_cols, data, a, b):
+def compute_cell(category_col, features_cols, data, a, b, balanced):
     if a == b:
-        return a_against_all(category_col, features_cols, data, a)
+        return a_against_all(category_col, features_cols, data, a, balanced)
     else:
-        return a_against_b(category_col, features_cols, data, a, b)
+        return a_against_b(category_col, features_cols, data, a, b, balanced)
 
-def a_against_all(category_col, features_cols, data, a):
+def a_against_all(category_col, features_cols, data, a, balanced):
     new_data = data.copy()
 
     is_a_col = "is_a"
     new_data[is_a_col] = new_data[category_col].map(lambda x: x == a)
 
     labels = [True, False]
-    features_score_classifiers = calculate_features(is_a_col, features_cols, new_data, labels)
+    features_score_classifiers = calculate_features(is_a_col, features_cols, new_data, labels, balanced)
 
     print(a + " vs ~" + a)
 
     return features_score_classifiers
 
-def a_against_b(category_col, features_cols, data, a, b):
+def a_against_b(category_col, features_cols, data, a, b, balanced):
     new_data = data[data[category_col].isin([a, b])]
 
     labels = [a, b]
-    features_score_classifiers = calculate_features(category_col, features_cols, new_data, labels)
+    features_score_classifiers = calculate_features(category_col, features_cols, new_data, labels, balanced)
 
     print(a + " vs " + b)
 
     return features_score_classifiers
 
-def calculate_features(category_col, features_cols, data, labels):
+def calculate_features(category_col, features_cols, data, labels, balanced):
     test_size = 0.2
     random_state = 42
+
+    a = data[data[category_col] == labels[0]]
+    b = data[data[category_col] == labels[1]]
+
+    a_examples = len(a)
+    b_examples = len(b)
+
+    if balanced:
+        min_examples = np.min([a_examples, b_examples])
+
+        np.random.seed(random_state)
+        a = a.reindex(np.random.permutation(a.index))
+        b = b.reindex(np.random.permutation(b.index))
+
+        a_limited = a.iloc[:min_examples]
+        b_limited = b.iloc[:min_examples]
+        data = pd.concat([a_limited, b_limited])
+
+        a_examples = min_examples
+        b_examples = min_examples
 
     X = data.as_matrix(features_cols)
     y = np.array(data[category_col])
@@ -98,9 +118,6 @@ def calculate_features(category_col, features_cols, data, labels):
     y_2 = y
 
     cm_2, _, cv_score = get_feature_importances(X_2, y_2, labels)
-
-    a_examples = len(data[data[category_col] == labels[0]])
-    b_examples = len(data[data[category_col] == labels[1]])
 
     model = create_final_classifier(X_2, y_2)
     classifier = (best_features, model)
