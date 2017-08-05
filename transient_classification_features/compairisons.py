@@ -143,15 +143,15 @@ def get_feature_importances(X, y, labels):
 
         importances.append(rf.feature_importances_)
         cv_cms.append(confusion_matrix(rf, X_test, y_test, labels))
-        cv_scores.append(f1_score(rf, X_test, y_test))
+        cv_scores.append(score(rf, X_test, y_test))
 
-    mean_cm = np.mean(cv_cms, axis=0)
+    cm = cv_cms[0]
     mean_score = np.mean(cv_scores)
 
     importances = np.array(importances)
     importances = importances[0]
 
-    return mean_cm, importances, mean_score
+    return cm, importances, mean_score
 
 def choose_num_features(data, category_col, sorted_features_cols):
     n_estimators = 10
@@ -181,7 +181,7 @@ def choose_num_features(data, category_col, sorted_features_cols):
             rf.fit(X_train, y_train)
 
             importances.append(rf.feature_importances_)
-            cv_scores.append(f1_score(rf, X_test, y_test))
+            cv_scores.append(score(rf, X_test, y_test))
 
         mean_score = np.mean(cv_scores)
 
@@ -214,7 +214,7 @@ def confusion_matrix(model, X, y, labels):
 
     return cm
 
-def f1_score(model, X, y):
+def score(model, X, y):
     y = np.array(y)
 
     y_pred = model.predict(X)
@@ -225,4 +225,58 @@ def f1_score(model, X, y):
     y = encoder.transform(y)
     y_pred = encoder.transform(y_pred)
 
-    return sklearn.metrics.f1_score(y, y_pred)
+    return normalized_matthews_correlation(y, y_pred)
+
+def normalized_matthews_correlation(y, y_pred):
+    num_a = y[y == 0].size
+    num_b = y[y == 1].size
+
+    values = get_table_values(y, y_pred)
+
+    t_p = values[values == "t_p"].size
+    f_n = values[values == "f_n"].size
+
+    f_p = values[values == "f_p"].size
+    t_n = values[values == "t_n"].size
+
+    w_a = 1.0 / num_a
+    w_b = 1.0 / num_b
+
+    t_p = t_p * w_a
+    f_n = f_n * w_a
+
+    t_n = t_n * w_b
+    f_p = f_p * w_b
+
+    numer = t_p * t_n - f_p * f_n
+
+    p_1 = (t_p + f_p)
+    p_2 = (t_p + f_n)
+    p_3 = (t_n + f_p)
+    p_4 = (t_n + f_n)
+
+    denom = p_1 * p_2 * p_3 * p_4
+
+    result = numer / np.sqrt(denom)
+
+    if np.isnan(result):
+        result = 0.0
+
+    return result
+
+def get_table_values(y, y_pred):
+    results = []
+    for i in range(y.size):
+        if y_pred[i] == 0:
+            if y[i] == y_pred[i]:
+                results.append("t_p")
+            else:
+                results.append("f_p")
+        else:
+            if y[i] == y_pred[i]:
+                results.append("t_n")
+            else:
+                results.append("f_n")
+
+    return np.array(results)
+
