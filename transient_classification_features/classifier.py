@@ -79,22 +79,34 @@ def save_confusion_matrix(y, y_pred, filepath, data, category_col, classifier):
 
     #sns.set_context("talk", font_scale=2.2)
     #figsize = (54, 38)
-    figsize = (20, 16)
+    #figsize = (20, 16)
+    figsize = (26, 18)
+    fontsize = 20
+    sns.set_context("poster")
+    #figsize = (20, 16)
+    #fontsize = 20
+
+    title = "Confusion Matrix ~ CRTS North -> CRTS South"
 
     #normalize = "percent"
     normalize = True
-    ax = sciplt.plotters.plot_confusion_matrix(y, y_pred, hide_zeros=True, normalize=normalize, x_tick_rotation=90, title_fontsize="large", text_fontsize="large", true_label_indexes=true_labels, pred_label_indexes=pred_labels, labels=labels, figsize=figsize)
+    ax = sciplt.plotters.plot_confusion_matrix(y, y_pred, hide_zeros=True, normalize=normalize, x_tick_rotation=90, title_fontsize="large", text_fontsize="large", true_label_indexes=true_labels, pred_label_indexes=pred_labels, labels=labels, figsize=figsize, title=title)
     for text in ax.texts:
         #text.set_weight('bold')
         #text.set_fontsize(80)
-        text.set_fontsize(20)
-    #for text in ax.xaxis.get_ticklabels():
+        text.set_fontsize(fontsize * 1.2)
+    for text in ax.xaxis.get_ticklabels():
+        text.set_fontsize(fontsize)
     #    text.set_weight('bold')
-    #for text in ax.yaxis.get_ticklabels():
+    for text in ax.yaxis.get_ticklabels():
+        text.set_fontsize(fontsize)
     #    text.set_weight('bold')
     #ax.xaxis.label.set_weight('bold')
     #ax.yaxis.label.set_weight('bold')
     #ax.title.set_weight('bold')
+    ax.xaxis.label.set_fontsize(fontsize)
+    ax.yaxis.label.set_fontsize(fontsize)
+    ax.title.set_fontsize(fontsize)
     #plt.show()
     plt.savefig(filepath)
 
@@ -136,7 +148,7 @@ class BlackBoxClassifier(object):
         if self.unknown in self.categories:
             raise Exception("There cannot be a category named %s as this name is reserved." % self.unknown)
 
-        self.unknown_threshold = 0.51
+        self.unknown_threshold = 0.50
 
     def predict(self, data):
         results = self.get_class_probabilities(data)

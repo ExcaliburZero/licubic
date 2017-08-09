@@ -8,8 +8,8 @@ import pystache
 import sys
 import datetime
 
-RED_CELL_UPPER = 0.30
-YELLOW_CELL_UPPER = 0.60
+RED_CELL_UPPER = 0.50
+YELLOW_CELL_UPPER = 0.75
 
 def main():
     data_file = sys.argv[1]
