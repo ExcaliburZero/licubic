@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import unittest
 
-from light_curve_features import feature_extract
+from licubic import feature_extraction
 
 TEST_CURVES = [
     (
@@ -73,7 +73,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         def test(curve):
             times = curve[TIMES]
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.linear_trend(times, magnitudes)
+            return feature_extraction.linear_trend(times, magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -87,7 +87,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
         def test(curve):
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.magnitude_ratio(magnitudes)
+            return feature_extraction.magnitude_ratio(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -102,7 +102,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         def test(curve):
             times = curve[TIMES]
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.maximum_slope(times, magnitudes)
+            return feature_extraction.maximum_slope(times, magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -116,7 +116,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
         def test(curve):
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.beyond_1std(magnitudes)
+            return feature_extraction.beyond_1std(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -130,7 +130,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
         def test(curve):
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.r_cor_bor(magnitudes)
+            return feature_extraction.r_cor_bor(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -144,7 +144,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
         def test(curve):
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.median_absolute_deviation(magnitudes)
+            return feature_extraction.median_absolute_deviation(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -158,7 +158,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
         def test(curve):
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.median_buffer_range_percentage(magnitudes)
+            return feature_extraction.median_buffer_range_percentage(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -172,7 +172,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
         def test(curve):
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.percent_amplitude(magnitudes)
+            return feature_extraction.percent_amplitude(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -186,7 +186,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
         def test(curve):
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.total_variation(magnitudes)
+            return feature_extraction.total_variation(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -200,7 +200,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
         def test(curve):
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.quadratic_variation(magnitudes)
+            return feature_extraction.quadratic_variation(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -219,14 +219,14 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
             period = 0.5
             phase_times, phase_magnitudes, phase_errors = \
-                feature_extract.phase_fold(times, magnitudes, errors, period)
+                feature_extraction.phase_fold(times, magnitudes, errors, period)
 
-            sm_phase_times, sm_phase_magnitudes = feature_extract.smooth_curve(phase_times, magnitudes)
+            sm_phase_times, sm_phase_magnitudes = feature_extraction.smooth_curve(phase_times, magnitudes)
 
-            lc_rms = feature_extract.root_mean_square(magnitudes)
-            sm_phase_rms = feature_extract.root_mean_square(sm_phase_magnitudes)
+            lc_rms = feature_extraction.root_mean_square(magnitudes)
+            sm_phase_rms = feature_extraction.root_mean_square(sm_phase_magnitudes)
 
-            return feature_extract.periodicity_metric(lc_rms, sm_phase_rms)
+            return feature_extraction.periodicity_metric(lc_rms, sm_phase_rms)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -241,9 +241,9 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         def test(curve):
             magnitudes = curve[MAGNITUDES]
 
-            lc_rms = feature_extract.root_mean_square(magnitudes)
+            lc_rms = feature_extraction.root_mean_square(magnitudes)
 
-            return feature_extract.light_curve_flux_asymmetry(magnitudes, lc_rms)
+            return feature_extraction.light_curve_flux_asymmetry(magnitudes, lc_rms)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -257,7 +257,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
         def test(curve):
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.root_mean_square(magnitudes)
+            return feature_extraction.root_mean_square(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -273,7 +273,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
             magnitudes = curve[MAGNITUDES]
             errors = curve[ERRORS]
 
-            return feature_extract.chi_2_test(magnitudes, errors)
+            return feature_extraction.chi_2_test(magnitudes, errors)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -285,7 +285,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
         def test(curve):
             magnitudes = curve[MAGNITUDES]
-            return feature_extract.interquartile_range(magnitudes)
+            return feature_extraction.interquartile_range(magnitudes)
 
         try_expected(self, [TEST_CURVES[0]] + [TEST_CURVES[3]], expected_results, test)
 
@@ -300,7 +300,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         def test(curve):
             magnitudes = curve[MAGNITUDES]
             errors = curve[ERRORS]
-            return feature_extract.robust_median_statistic(magnitudes, errors)
+            return feature_extraction.robust_median_statistic(magnitudes, errors)
 
         try_expected(self, TEST_CURVES[0], expected_results, test)
         """
@@ -317,7 +317,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
             magnitudes = curve[MAGNITUDES]
             errors = curve[ERRORS]
 
-            return feature_extract.peak_to_peak_variability(magnitudes, errors)
+            return feature_extraction.peak_to_peak_variability(magnitudes, errors)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -332,7 +332,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
             times = curve[TIMES]
             order = 3
 
-            return feature_extract.fourier_decomposition(magnitudes, times, order)
+            return feature_extraction.fourier_decomposition(magnitudes, times, order)
 
         try_expected(self, TEST_CURVES[1:2] + TEST_CURVES[3:], expected_results, test)
 
@@ -343,7 +343,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         order = 3
 
         try:
-            feature_extract.fourier_decomposition(magnitudes, times, order)
+            feature_extraction.fourier_decomposition(magnitudes, times, order)
             self.assertTrue(False)
         except Exception as e:
             expected = "Too few examples for the specified order. Number of examples must be at least order * 2 + 1. Required: 7, Actual: 5"
@@ -361,10 +361,10 @@ class TestFeatureExtractFeatures(unittest.TestCase):
             times = curve[TIMES]
             order = 3
 
-            coef = feature_extract.fourier_decomposition(magnitudes, times, order)
+            coef = feature_extraction.fourier_decomposition(magnitudes, times, order)
 
-            r_21 = feature_extract.fourier_R_1(coef, 2)
-            r_31 = feature_extract.fourier_R_1(coef, 3)
+            r_21 = feature_extraction.fourier_R_1(coef, 2)
+            r_31 = feature_extraction.fourier_R_1(coef, 3)
 
             return np.array([r_21, r_31])
 
@@ -381,10 +381,10 @@ class TestFeatureExtractFeatures(unittest.TestCase):
             times = curve[TIMES]
             order = 3
 
-            coef = feature_extract.fourier_decomposition(magnitudes, times, order)
+            coef = feature_extraction.fourier_decomposition(magnitudes, times, order)
 
-            phi_21 = feature_extract.fourier_phi_1(coef, 2)
-            phi_31 = feature_extract.fourier_phi_1(coef, 3)
+            phi_21 = feature_extraction.fourier_phi_1(coef, 2)
+            phi_31 = feature_extraction.fourier_phi_1(coef, 3)
 
             return np.array([phi_21, phi_31])
 
@@ -401,7 +401,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         def test(curve):
             magnitudes = curve[MAGNITUDES]
 
-            return feature_extract.residual_bright_faint_ratio(magnitudes)
+            return feature_extraction.residual_bright_faint_ratio(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -416,7 +416,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         def test(curve):
             magnitudes = curve[MAGNITUDES]
 
-            return feature_extract.cumulative_sum_range(magnitudes)
+            return feature_extraction.cumulative_sum_range(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -431,7 +431,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         def test(curve):
             magnitudes = curve[MAGNITUDES]
 
-            return feature_extract.von_neumann_eta(magnitudes)
+            return feature_extraction.von_neumann_eta(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -446,7 +446,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         def test(curve):
             magnitudes = curve[MAGNITUDES]
 
-            return feature_extract.mean_crosses(magnitudes)
+            return feature_extraction.mean_crosses(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -461,7 +461,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         def test(curve):
             magnitudes = curve[MAGNITUDES]
 
-            return feature_extract.above_1std(magnitudes)
+            return feature_extraction.above_1std(magnitudes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -477,9 +477,9 @@ class TestFeatureExtractFeatures(unittest.TestCase):
             magnitudes = curve[MAGNITUDES]
             times = curve[TIMES]
 
-            slopes = feature_extract.curve_slopes(times, magnitudes)
+            slopes = feature_extraction.curve_slopes(times, magnitudes)
 
-            return feature_extract.above_below_1std_slopes(slopes)
+            return feature_extraction.above_below_1std_slopes(slopes)
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
@@ -489,7 +489,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         data = pd.DataFrame(["jne2e"])
         data.columns = [star_id_col]
         data[period_col] = 0.2342
-        data = feature_extract.add_feature_columns(data)
+        data = feature_extraction.add_feature_columns(data)
         data = data.iloc[0]
 
         curves_dir = ""
@@ -500,7 +500,7 @@ class TestFeatureExtractFeatures(unittest.TestCase):
         errors = times / 100.0
         light_curve = np.transpose(np.vstack([times, magnitudes, errors]))
 
-        feature_extract.extract_features(data, star_id_col, period_col, light_curve, curves_dir, save_curve_files)
+        feature_extraction.extract_features(data, star_id_col, period_col, light_curve, curves_dir, save_curve_files)
 
 class TestFeatureExtractUtilities(unittest.TestCase):
 
@@ -513,7 +513,7 @@ class TestFeatureExtractUtilities(unittest.TestCase):
         magnitudes = np.array([[14.2], [14.0], [13.9], [14.2]])
         errors = np.array([[0.005], [0.01], [0.02], [0.001]])
 
-        act_time, act_mags, act_err = feature_extract.clean_light_curve(times, magnitudes, errors)
+        act_time, act_mags, act_err = feature_extraction.clean_light_curve(times, magnitudes, errors)
 
         np.testing.assert_allclose(act_time, times, rtol=1e-5)
         np.testing.assert_allclose(act_mags, magnitudes, rtol=1e-5)
@@ -527,7 +527,7 @@ class TestFeatureExtractUtilities(unittest.TestCase):
         magnitudes = np.array([[14.2], [14.0], [13.9], [14.2]])
         errors = np.array([[0.005], [0.01], [0.02], [0.001]])
 
-        act_time, act_mags, act_err = feature_extract.clean_light_curve(times, magnitudes, errors)
+        act_time, act_mags, act_err = feature_extraction.clean_light_curve(times, magnitudes, errors)
 
         exp_time = np.array([[1.3], [3.0], [3.9], [4.9]])
         exp_mags = np.array([[14.0], [14.2], [14.2], [13.9]])
@@ -546,7 +546,7 @@ class TestFeatureExtractUtilities(unittest.TestCase):
         magnitudes = np.array([[14.2], [14.2], [13.9], [14.2]])
         errors = np.array([[0.01], [0.01], [0.02], [0.001]])
 
-        act_time, act_mags, act_err = feature_extract.clean_light_curve(times, magnitudes, errors)
+        act_time, act_mags, act_err = feature_extraction.clean_light_curve(times, magnitudes, errors)
 
         exp_time = np.array([[1.3], [3.0], [4.9]])
         exp_mags = np.array([[14.2], [14.2], [13.9]])
