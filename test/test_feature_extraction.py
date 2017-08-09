@@ -555,3 +555,37 @@ class TestFeatureExtractUtilities(unittest.TestCase):
         np.testing.assert_allclose(act_time, exp_time, rtol=1e-5)
         np.testing.assert_allclose(act_mags, exp_mags, rtol=1e-5)
         np.testing.assert_allclose(act_err, exp_err, rtol=1e-5)
+
+np.random.seed(42)
+TEST_GEN_CURVES = [
+    np.array([
+        np.arange(0, 10, 0.5),
+        np.sin(np.arange(0, 10, 0.5)),
+        np.random.normal(0.03, 0.01, 20)
+    ]).transpose(),
+    np.array([
+        np.arange(0, 10, 0.5),
+        np.cos(np.arange(0, 10, 0.5)),
+        np.random.normal(0.03, 0.01, 20)
+    ]).transpose(),
+    np.array([
+        np.arange(0, 20, 0.5),
+        np.sin(np.arange(0, 20, 0.5) * np.pi),
+        np.random.normal(0.03, 0.01, 40)
+    ]).transpose()
+]
+
+class TestFeatureExtractor(unittest.TestCase):
+
+    def test_transform(self):
+        extractor = feature_extraction.FeatureExtractor()
+
+        actual = extractor.transform(TEST_GEN_CURVES)
+
+        expected = np.array([
+            [0.987513, -0.002155, 0.5],
+            [0.998586, -0.057269, 0.5],
+            [1.0, -0.007505, 0.5]
+        ])
+
+        np.testing.assert_allclose(actual, expected, rtol=1e-4)

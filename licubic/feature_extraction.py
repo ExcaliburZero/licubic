@@ -6,11 +6,118 @@ from scipy.optimize import leastsq
 from scipy.signal import savgol_filter
 from sklearn import linear_model
 
+import collections
 import math
 import numpy as np
 import pandas as pd
 import scipy.stats as ss
 import sys
+
+LIGHT_CURVE = "light_curve"
+
+class FeatureExtractor(object):
+
+    def __init__(self, features=None):
+        if features is None:
+            features = get_default_features()
+
+        missing_features = features.get_missing_features()
+
+        any_missing = len(missing_features) != 0
+        if any_missing:
+            msg = "The following required features are not defined: %s" % ", ".join(missing_features)
+            raise ValueError(msg)
+
+        self.features = features
+
+    def transform(self, X):
+        return self.features.transform(X)
+
+class FeatureSet(object):
+
+    def __init__(self):
+        self.features = {}
+
+        self.external_features = collections.OrderedDict()
+
+    def add_external(self, feature):
+        self.add_internal(feature)
+
+        self.external_features[feature.name] = True
+
+    def add_internal(self, feature):
+        self.features[feature.name] = feature
+
+    def remove(self, name):
+        if name not in self.features:
+            msg = "%s cannot be removed from the feature set as it is not present." % name
+            raise ValueError(msg)
+
+        self.features.pop(name, None)
+        self.features_order.pop(name, None)
+
+    def get_missing_features(self):
+        missing_features = []
+        for f in self.features.values():
+            missing = [d for d in f.dependencies if d not in self.features and d != LIGHT_CURVE]
+
+            missing_features += missing
+
+        return missing_features
+
+    def transform(self, X):
+        calculated = {}
+        calculated[LIGHT_CURVE] = X
+
+        self._transform_all(calculated)
+
+        return np.array([calculated[f] for f in self.external_features]).transpose()
+
+    def _transform_all(self, calculated):
+        for f in self.features.keys():
+            calculated[f] = self._transform_feature(calculated, f)
+
+    def _transform_feature(self, calculated, f):
+        if f in calculated:
+            return calculated[f]
+
+        feature = self.features[f]
+
+        dependencies = np.array([self._transform_feature(calculated, d) for d in feature.dependencies]).transpose()
+
+        result = feature.transform(dependencies)
+
+        calculated[f] = result
+        return result
+
+class Feature(object):
+
+    def __init__(self, name, dependencies, function):
+        self.name = name
+        self.dependencies = dependencies
+        self.function = function
+
+    def transform(self, X):
+        return np.array([self.function(*row) for row in X])
+
+def get_default_features():
+    feature_set = FeatureSet()
+
+    internal_features = [
+        times_def(), magnitudes_def(), errors_def()
+    ]
+
+    external_features = [
+        amplitude_def(), linear_trend_def(), magnitude_ratio_def()
+    ]
+
+    for f in internal_features:
+        feature_set.add_internal(f)
+
+    for f in external_features:
+        feature_set.add_external(f)
+
+    return feature_set
 
 def process_data(data, star_id_col, period_col, curves_dir, time_col, mag_col, err_col, save_curve_files=False):
     """
@@ -356,6 +463,34 @@ def magnitudes_to_fluxes(magnitudes):
 
     return fluxes
 
+def times_def():
+    name = "times"
+    dependencies = [LIGHT_CURVE]
+    function = lambda X: np.expand_dims(X[:,0], axis=1)
+
+    return Feature(name, dependencies, function)
+
+def magnitudes_def():
+    name = "magnitudes"
+    dependencies = [LIGHT_CURVE]
+    function = lambda X: np.expand_dims(X[:,1], axis=1)
+
+    return Feature(name, dependencies, function)
+
+def errors_def():
+    name = "errors"
+    dependencies = [LIGHT_CURVE]
+    function = lambda X: np.expand_dims(X[:,2], axis=1)
+
+    return Feature(name, dependencies, function)
+
+def amplitude_def():
+    name = "ampl"
+    dependencies = ["magnitudes"]
+    function = amplitude
+
+    return Feature(name, dependencies, function)
+
 def amplitude(magnitudes):
     """
     Returns the amplitude of the light curve, defined as half the difference
@@ -388,6 +523,13 @@ def lomb_scargle_periodogram(times, magnitudes, errors):
 
     return best_period
 
+def linear_trend_def():
+    name = "lt"
+    dependencies = ["times", "magnitudes"]
+    function = linear_trend
+
+    return Feature(name, dependencies, function)
+
 def linear_trend(times, magnitudes):
     """
     Returns the slope of a linear line fit to the light curve.
@@ -413,6 +555,13 @@ def linear_trend(times, magnitudes):
     model.fit(times, magnitudes)
 
     return model.coef_[0][0]
+
+def magnitude_ratio_def():
+    name = "mr"
+    dependencies = ["magnitudes"]
+    function = magnitude_ratio
+
+    return Feature(name, dependencies, function)
 
 def magnitude_ratio(magnitudes):
     """
