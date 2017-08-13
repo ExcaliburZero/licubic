@@ -9,17 +9,21 @@ import sklearn.model_selection
 import sklearn.metrics
 import sklearn.preprocessing
 
-def feature_matrix(category_col, features_cols, data, balanced=False):
-    categories = data[category_col].unique()
+def feature_matrix(X, y, feature_names, balanced=False):
+    categories = np.unique(y)
 
     combinations = list(itertools.combinations_with_replacement(categories, 2))
 
-    calculations = []
-    for (a, b) in combinations:
-        calc = delayed(compute_cell)(category_col, features_cols, data, a, b, balanced)
-        calculations.append(calc)
+    parallel = False
+    if parallel:
+        calculations = []
+        for (a, b) in combinations:
+            calc = delayed(compute_cell)(X, y, feature_names, a, b, balanced)
+            calculations.append(calc)
 
-    info = delayed(calculations).compute()
+        info = delayed(calculations).compute()
+    else:
+        info = [compute_cell(X, y, feature_names, a, b, balanced) for (a, b) in combinations]
 
     matrix = {}
     classifiers = {}
@@ -45,41 +49,43 @@ def rank_features(matrix, features):
 
     return sorted(features_ranking.items(), key=operator.itemgetter(1))[::-1]
 
-def compute_cell(category_col, features_cols, data, a, b, balanced):
+def compute_cell(X, y, feature_names, a, b, balanced):
     if a == b:
-        return a_against_all(category_col, features_cols, data, a, balanced)
+        return a_against_all(X, y, feature_names, a, balanced)
     else:
-        return a_against_b(category_col, features_cols, data, a, b, balanced)
+        return a_against_b(X, y, feature_names, a, b, balanced)
 
-def a_against_all(category_col, features_cols, data, a, balanced):
-    new_data = data.copy()
+def a_against_all(X, y, feature_names, a, balanced):
+    is_a = np.vectorize(lambda x: x == a)
 
-    is_a_col = "is_a"
-    new_data[is_a_col] = new_data[category_col].map(lambda x: x == a)
+    y_2 = is_a(y) 
 
-    labels = [True, False]
-    features_score_classifiers = calculate_features(is_a_col, features_cols, new_data, labels, balanced)
+    labels = np.array([True, False])
+    features_score_classifiers = calculate_features(X, y_2, feature_names, labels, balanced)
 
     print(a + " vs ~" + a)
 
     return features_score_classifiers
 
-def a_against_b(category_col, features_cols, data, a, b, balanced):
-    new_data = data[data[category_col].isin([a, b])]
+def a_against_b(X, y, feature_names, a, b, balanced):
+    indexes = np.where(np.isin(y, [a, b]))
+    
+    X_2 = X[indexes]
+    y_2 = y[indexes]
 
-    labels = [a, b]
-    features_score_classifiers = calculate_features(category_col, features_cols, new_data, labels, balanced)
+    labels = np.array([a, b])
+    features_score_classifiers = calculate_features(X_2, y_2, feature_names, labels, balanced)
 
     print(a + " vs " + b)
 
     return features_score_classifiers
 
-def calculate_features(category_col, features_cols, data, labels, balanced):
+def calculate_features(X, y, feature_names, labels, balanced):
     test_size = 0.2
     random_state = 42
 
-    a = data[data[category_col] == labels[0]]
-    b = data[data[category_col] == labels[1]]
+    a = y[y == labels[0]]
+    b = y[y == labels[1]]
 
     a_examples = len(a)
     b_examples = len(b)
@@ -93,28 +99,29 @@ def calculate_features(category_col, features_cols, data, labels, balanced):
 
         a_limited = a.iloc[:min_examples]
         b_limited = b.iloc[:min_examples]
-        data = pd.concat([a_limited, b_limited])
+        y = pd.concat([a_limited, b_limited])
 
         a_examples = min_examples
         b_examples = min_examples
 
-    X = data.as_matrix(features_cols)
-    y = np.array(data[category_col])
+    #X = data.as_matrix(features_cols)
+    #y = np.array(data[category_col])
 
     cm_1, importances, _ = get_feature_importances(X, y, labels)
 
     feature_indexes = np.argsort(importances)[::-1]
-    sorted_features_cols = np.array(features_cols)[feature_indexes]
 
-    n_best = choose_num_features(data, category_col, sorted_features_cols)
+    sorted_features_names = np.array(feature_names)[feature_indexes]
+
+    n_best = choose_num_features(X, y, feature_indexes)
 
     best_feature_indexes = feature_indexes[:n_best]
 
-    best_features = np.array(features_cols)[best_feature_indexes]
+    best_features = np.array(feature_names)[best_feature_indexes]
 
     best_features_info = list(zip(best_features, importances[best_feature_indexes]))
 
-    X_2 = data.as_matrix(best_features)
+    X_2 = X[:,best_feature_indexes]
     y_2 = y
 
     cm_2, _, cv_score = get_feature_importances(X_2, y_2, labels)
@@ -130,7 +137,8 @@ def get_feature_importances(X, y, labels):
     cv = 5
     shuffle = True
 
-    kf = sklearn.model_selection.KFold(n_splits=cv, shuffle=shuffle, random_state=random_state)
+    #kf = sklearn.model_selection.KFold(n_splits=cv, shuffle=shuffle, random_state=random_state)
+    kf = sklearn.model_selection.StratifiedKFold(n_splits=cv, shuffle=shuffle, random_state=random_state)
     cv_cms = []
     cv_scores = []
     importances = []
@@ -153,7 +161,7 @@ def get_feature_importances(X, y, labels):
 
     return cm, importances, mean_score
 
-def choose_num_features(data, category_col, sorted_features_cols):
+def choose_num_features(X, y, sorted_feature_indexes):
     n_estimators = 10
     random_state = 42
     cv = 5
@@ -161,20 +169,18 @@ def choose_num_features(data, category_col, sorted_features_cols):
 
     increase_threshold = 0.03#0.05
 
-    y = np.array(data[category_col])
-
     num_features = 1
     prev_score = 0.0
-    for i in range(len(sorted_features_cols)):
-        features = sorted_features_cols[0:i + 1]
+    for i in range(len(sorted_feature_indexes)):
+        features = sorted_feature_indexes[0:i + 1]
 
-        X = data.as_matrix(features)
+        X_sel = X[:,features]
 
         kf = sklearn.model_selection.KFold(n_splits=cv, shuffle=shuffle, random_state=random_state)
         cv_scores = []
         importances = []
-        for train, test in kf.split(X, y):
-            X_train, X_test, y_train, y_test = X[train], X[test], y[train], y[test]
+        for train, test in kf.split(X_sel, y):
+            X_train, X_test, y_train, y_test = X_sel[train], X_sel[test], y[train], y[test]
 
             rf = sklearn.ensemble.RandomForestClassifier(class_weight="balanced", n_estimators=n_estimators, random_state=random_state)
 

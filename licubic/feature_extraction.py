@@ -33,12 +33,23 @@ class FeatureExtractor(object):
     def transform(self, X):
         return self.features.transform(X)
 
+    def get_external_features(self):
+        return np.array([f for f in self.features.external_features])
+
+    def subset(self, feature_names):
+        subset_features = self.features.subset(feature_names)
+
+        return FeatureExtractor(features=subset_features)
+
 class FeatureSet(object):
 
     def __init__(self):
         self.features = {}
 
         self.external_features = collections.OrderedDict()
+
+    def __str__(self):
+        return "FeatureSet(%s)" % self.features
 
     def add_external(self, feature):
         self.add_internal(feature)
@@ -55,6 +66,9 @@ class FeatureSet(object):
 
         self.features.pop(name, None)
         self.features_order.pop(name, None)
+
+    def contains(self, feature_name):
+        return feature_name in self.features
 
     def get_missing_features(self):
         missing_features = []
@@ -83,12 +97,37 @@ class FeatureSet(object):
 
         feature = self.features[f]
 
-        dependencies = np.array([self._transform_feature(calculated, d) for d in feature.dependencies]).transpose()
+        dependencies = np.swapaxes(
+                np.array([self._transform_feature(calculated, d) for d in feature.dependencies]),
+                0, 1)
 
         result = feature.transform(dependencies)
 
         calculated[f] = result
         return result
+
+    def subset(self, feature_names):
+        subset_features = FeatureSet()
+        for f_name in feature_names:
+            feature = self.features[f_name]
+
+            subset_features.add_external(feature)
+
+        for f_name in feature_names:
+            feature = self.features[f_name]
+
+            self._add_features(subset_features, feature.dependencies)
+
+        return subset_features
+
+    def _add_features(self, subset_features, features):
+        for f_name in features:
+            if not subset_features.contains(f_name) and f_name != LIGHT_CURVE:
+                feature = self.features[f_name]
+
+                subset_features.add_internal(feature)
+                self._add_features(subset_features, feature.dependencies)
+
 
 class Feature(object):
 
@@ -104,11 +143,17 @@ def get_default_features():
     feature_set = FeatureSet()
 
     internal_features = [
-        times_def(), magnitudes_def(), errors_def()
+        times_def(), magnitudes_def(), errors_def(), fluxes_def()
     ]
 
     external_features = [
         amplitude_def(), linear_trend_def(), magnitude_ratio_def()
+      , maximum_slope_def(), beyond_1std_def(), r_cor_bor_def()
+      , median_absolute_deviation_def(), median_buffer_range_percentage_def()
+      , percent_amplitude_def(), pair_slope_trend_def()
+      , percent_difference_flux_percentile_def(), small_kurtosis_def()
+      , flux_percentage_ratio_20_def(), flux_percentage_ratio_35_def()
+      , flux_percentage_ratio_50_def()
     ]
 
     for f in internal_features:
@@ -458,11 +503,6 @@ def save_curve(curves_dir, star_id, curve_name, times, magnitudes, columns):
 
     curve.to_csv(curve_path, index=False)
 
-def magnitudes_to_fluxes(magnitudes):
-    fluxes = 10.0 ** (-0.4 * magnitudes)
-
-    return fluxes
-
 def times_def():
     name = "times"
     dependencies = [LIGHT_CURVE]
@@ -483,6 +523,18 @@ def errors_def():
     function = lambda X: np.expand_dims(X[:,2], axis=1)
 
     return Feature(name, dependencies, function)
+
+def fluxes_def():
+    name = "fluxes"
+    dependencies = ["magnitudes"]
+    function = magnitudes_to_fluxes
+
+    return Feature(name, dependencies, function)
+
+def magnitudes_to_fluxes(magnitudes):
+    fluxes = 10.0 ** (-0.4 * magnitudes)
+
+    return fluxes
 
 def amplitude_def():
     name = "ampl"
@@ -588,6 +640,13 @@ def magnitude_ratio(magnitudes):
 
     return points_above_median / magnitudes.size
 
+def maximum_slope_def():
+    name = "ms"
+    dependencies = ["times", "magnitudes"]
+    function = maximum_slope
+
+    return Feature(name, dependencies, function)
+
 def maximum_slope(times, magnitudes):
     """
     Returns the maximum slope between two points in the given light curve.
@@ -619,6 +678,13 @@ def maximum_slope(times, magnitudes):
 
     return max_slope
 
+def beyond_1std_def():
+    name = "b1std"
+    dependencies = ["magnitudes"]
+    function = beyond_1std
+
+    return Feature(name, dependencies, function)
+
 def beyond_1std(magnitudes):
     """
     Returns the percent of points in the light curve with a magnitude greater
@@ -647,6 +713,13 @@ def beyond_1std(magnitudes):
 
     return gt_1_std / magnitudes.size
 
+def r_cor_bor_def():
+    name = "rcb"
+    dependencies = ["magnitudes"]
+    function = r_cor_bor
+
+    return Feature(name, dependencies, function)
+
 def r_cor_bor(magnitudes):
     """
     Returns the percent of points above 1.5 mag over the median magnitude.
@@ -665,6 +738,13 @@ def r_cor_bor(magnitudes):
     above_1_5_median = magnitudes[magnitudes > (median_mag + 1.5)]
 
     return above_1_5_median.size / magnitudes.size
+
+def median_absolute_deviation_def():
+    name = "mad"
+    dependencies = ["magnitudes"]
+    function = median_absolute_deviation
+
+    return Feature(name, dependencies, function)
 
 def median_absolute_deviation(magnitudes):
     """
@@ -689,6 +769,13 @@ def median_absolute_deviation(magnitudes):
     absolute_deviations = np.absolute(deviations)
 
     return np.median(absolute_deviations)
+
+def median_buffer_range_percentage_def():
+    name = "mbrp"
+    dependencies = ["magnitudes"]
+    function = median_buffer_range_percentage
+
+    return Feature(name, dependencies, function)
 
 def median_buffer_range_percentage(magnitudes):
     """
@@ -719,6 +806,13 @@ def median_buffer_range_percentage(magnitudes):
 
     return within_p_10_median.size / magnitudes.size
 
+def percent_amplitude_def():
+    name = "pa"
+    dependencies = ["magnitudes"]
+    function = percent_amplitude
+
+    return Feature(name, dependencies, function)
+
 def percent_amplitude(magnitudes):
     """
     Returns the greater of the differences between the max and median magnitude
@@ -745,6 +839,13 @@ def percent_amplitude(magnitudes):
 
     return max(max_diff, min_diff)
 
+def pair_slope_trend_def():
+    name = "pst"
+    dependencies = ["times", "fluxes"]
+    function = pair_slope_trend
+
+    return Feature(name, dependencies, function)
+
 def pair_slope_trend(times, fluxes):
     flux_slopes = curve_slopes(times, fluxes)
 
@@ -754,6 +855,13 @@ def pair_slope_trend(times, fluxes):
 
     return pst
 
+def percent_difference_flux_percentile_def():
+    name = "pdfp"
+    dependencies = ["fluxes"]
+    function = percent_difference_flux_percentile
+
+    return Feature(name, dependencies, function)
+
 def percent_difference_flux_percentile(fluxes):
     median_flux = np.median(fluxes)
 
@@ -761,14 +869,18 @@ def percent_difference_flux_percentile(fluxes):
 
     return pdfp
 
+def small_kurtosis_def():
+    name = "sk"
+    dependencies = ["magnitudes"]
+    function = small_kurtosis
+
+    return Feature(name, dependencies, function)
+
 def small_kurtosis(magnitudes):
     mean_mag = np.mean(magnitudes)
     n = magnitudes.shape[0]
 
     s = np.sqrt(np.sum(np.square(magnitudes - mean_mag)) / (n - 1))
-
-    #nm = n * (n + 1) * np.sum(np.power((magnitudes - mean_mag) / s, 4))
-    #dm = (n - 1) * (n - 2) * (n - 3) - ((3 * (n - 1) * (n - 1)) / ((n - 2) * (n - 3)))
 
     a = (n * (n - 1)) / ((n - 1) * (n - 2) * (n - 3))
     b = np.sum(np.power((magnitudes - mean_mag) / s, 4))
@@ -777,6 +889,41 @@ def small_kurtosis(magnitudes):
     sk = (a * b) - c
 
     return sk
+
+def flux_percentage_ratio_20_def():
+    name = "fpr20"
+    dependencies = ["fluxes"]
+    function = lambda fluxes: flux_percentage_ratio(fluxes, 40, 60, 5, 95)
+
+    return Feature(name, dependencies, function)
+
+def flux_percentage_ratio_35_def():
+    name = "fpr35"
+    dependencies = ["fluxes"]
+    function = lambda fluxes: flux_percentage_ratio(fluxes, 32.5, 67.5, 5, 95)
+
+    return Feature(name, dependencies, function)
+
+def flux_percentage_ratio_50_def():
+    name = "fpr50"
+    dependencies = ["fluxes"]
+    function = lambda fluxes: flux_percentage_ratio(fluxes, 25, 75, 5, 95)
+
+    return Feature(name, dependencies, function)
+
+def flux_percentage_ratio_65_def():
+    name = "fpr65"
+    dependencies = ["fluxes"]
+    function = lambda fluxes: flux_percentage_ratio(fluxes, 17.5, 82.5, 5, 95)
+
+    return Feature(name, dependencies, function)
+
+def flux_percentage_ratio_80_def():
+    name = "fpr80"
+    dependencies = ["fluxes"]
+    function = lambda fluxes: flux_percentage_ratio(fluxes, 10, 90, 5, 95)
+
+    return Feature(name, dependencies, function)
 
 def flux_percentile(fluxes, n, m):
     flux_n = np.percentile(fluxes, n)

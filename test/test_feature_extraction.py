@@ -483,24 +483,24 @@ class TestFeatureExtractFeatures(unittest.TestCase):
 
         try_expected(self, TEST_CURVES, expected_results, test)
 
-    def test_extract_features(self):
-        star_id_col = "id"
-        period_col = "period"
-        data = pd.DataFrame(["jne2e"])
-        data.columns = [star_id_col]
-        data[period_col] = 0.2342
-        data = feature_extraction.add_feature_columns(data)
-        data = data.iloc[0]
+#    def test_extract_features(self):
+#        star_id_col = "id"
+#        period_col = "period"
+#        data = pd.DataFrame(["jne2e"])
+#        data.columns = [star_id_col]
+#        data[period_col] = 0.2342
+#        data = feature_extraction.add_feature_columns(data)
+#        data = data.iloc[0]
 
-        curves_dir = ""
-        save_curve_files = False
+#        curves_dir = ""
+#        save_curve_files = False
 
-        times = np.arange(0, 10.0, 0.5)
-        magnitudes = np.sin(times) + 14.0
-        errors = times / 100.0
-        light_curve = np.transpose(np.vstack([times, magnitudes, errors]))
+#        times = np.arange(0, 10.0, 0.5)
+#        magnitudes = np.sin(times) + 14.0
+#        errors = times / 100.0
+#        light_curve = np.transpose(np.vstack([times, magnitudes, errors]))
 
-        feature_extraction.extract_features(data, star_id_col, period_col, light_curve, curves_dir, save_curve_files)
+#        feature_extraction.extract_features(data, star_id_col, period_col, light_curve, curves_dir, save_curve_files)
 
 class TestFeatureExtractUtilities(unittest.TestCase):
 
@@ -583,9 +583,12 @@ class TestFeatureExtractor(unittest.TestCase):
         actual = extractor.transform(TEST_GEN_CURVES)
 
         expected = np.array([
-            [0.987513, -0.002155, 0.5],
-            [0.998586, -0.057269, 0.5],
-            [1.0, -0.007505, 0.5]
+            [0.987513, -0.002155, 0.5, 0.989071, 0.4, 0.0, 0.56044324, 0.0, 0.68387575, 9.0, 2.01884346, -1.33656453, 1.53827137e-01, 2.51539805e-01, 0.41648757],
+            [0.998586, -0.057269, 0.5, 0.988916, 0.5, 0.0, 0.75490669, 0.0, 1.03738142, 12.0, 2.08331462, -1.8059096, 2.70091119e-01, 5.10890308e-01, 0.66092537],
+            [1.0, -0.007505, 0.5, 2.0, 0.5, 0.0, 0.5, 0.0, 1.0, 16.0, 2.11377926, -1.08179232, 8.40370077e-16, 1.78578641e-15, 0.25]
         ])
+
+        print(actual[:,-1])
+        print(expected[:,-1])
 
         np.testing.assert_allclose(actual, expected, rtol=1e-4)
