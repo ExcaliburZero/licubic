@@ -70,8 +70,4 @@ class TestClassifier(unittest.TestCase):
 
         y_pred = model.predict(TEST_CURVES_PREDICTABLE)
 
-        print(model.selected_features)
-        model.write_confusion_matrix(TEST_LABELS_PREDICTABLE, y_pred, "cm.png")
-        model.write_feature_matrix("site/feature_matrix.html")
-
         self.assertEqual(list(y_pred), TEST_LABELS_PREDICTABLE)

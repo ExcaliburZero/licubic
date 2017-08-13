@@ -169,7 +169,7 @@ class LICUBIC(object):
         self.matrix, self.binary_classifiers = compairisons.feature_matrix(X_feat, y, external_features)
 
         self.a_vs_not_a = get_a_versus_not_a(self.binary_classifiers)
-        self.categories = [a for (a, _) in self.a_vs_not_a.keys()] 
+        self.categories = [a for (a, _) in self.a_vs_not_a.keys()]
 
         self.selected_features = collections.OrderedDict()
         for (features, _) in self.a_vs_not_a.values():

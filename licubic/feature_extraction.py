@@ -7,6 +7,7 @@ from scipy.signal import savgol_filter
 from sklearn import linear_model
 
 import collections
+import itertools
 import math
 import numpy as np
 import pandas as pd
@@ -97,9 +98,9 @@ class FeatureSet(object):
 
         feature = self.features[f]
 
-        dependencies = np.swapaxes(
-                np.array([self._transform_feature(calculated, d) for d in feature.dependencies]),
-                0, 1)
+        dependencies = swapaxes(
+            [self._transform_feature(calculated, d) for d in feature.dependencies],
+        )
 
         result = feature.transform(dependencies)
 
@@ -128,6 +129,8 @@ class FeatureSet(object):
                 subset_features.add_internal(feature)
                 self._add_features(subset_features, feature.dependencies)
 
+def swapaxes(l):
+    return [[i for i in element if i is not None] for element in list(itertools.zip_longest(*l))]
 
 class Feature(object):
 
@@ -144,6 +147,7 @@ def get_default_features():
 
     internal_features = [
         times_def(), magnitudes_def(), errors_def(), fluxes_def()
+      , light_curve_rms_def()
     ]
 
     external_features = [
@@ -154,7 +158,7 @@ def get_default_features():
       , percent_difference_flux_percentile_def(), small_kurtosis_def()
       , flux_percentage_ratio_20_def(), flux_percentage_ratio_35_def()
       , flux_percentage_ratio_50_def(), flux_percentage_ratio_65_def()
-      , flux_percentage_ratio_80_def()
+      , flux_percentage_ratio_80_def(), light_curve_flux_asymmetry_def()
     ]
 
     for f in internal_features:
@@ -1094,6 +1098,13 @@ def periodicity_metric(light_curve_rms, sm_phase_rms):
     """
     return (sm_phase_rms ** 2) / (light_curve_rms ** 2)
 
+def light_curve_flux_asymmetry_def():
+    name = "lcfa"
+    dependencies = ["magnitudes", "lc_rms"]
+    function = light_curve_flux_asymmetry
+
+    return Feature(name, dependencies, function)
+
 def light_curve_flux_asymmetry(magnitudes, light_curve_rms):
     """
     Returns the light curve flux asymmetry of the given data.
@@ -1130,6 +1141,13 @@ def light_curve_flux_asymmetry(magnitudes, light_curve_rms):
     mean_top_bottom = np.mean(top_bottom_10_p)
 
     return (mean_top_bottom - median) / light_curve_rms
+
+def light_curve_rms_def():
+    name = "lc_rms"
+    dependencies = ["magnitudes"]
+    function = root_mean_square
+
+    return Feature(name, dependencies, function)
 
 def root_mean_square(xs):
     """
