@@ -153,7 +153,8 @@ def get_default_features():
       , percent_amplitude_def(), pair_slope_trend_def()
       , percent_difference_flux_percentile_def(), small_kurtosis_def()
       , flux_percentage_ratio_20_def(), flux_percentage_ratio_35_def()
-      , flux_percentage_ratio_50_def()
+      , flux_percentage_ratio_50_def(), flux_percentage_ratio_65_def()
+      , flux_percentage_ratio_80_def()
     ]
 
     for f in internal_features:
