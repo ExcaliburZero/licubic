@@ -159,6 +159,11 @@ def get_default_features():
       , flux_percentage_ratio_20_def(), flux_percentage_ratio_35_def()
       , flux_percentage_ratio_50_def(), flux_percentage_ratio_65_def()
       , flux_percentage_ratio_80_def(), light_curve_flux_asymmetry_def()
+      , chi_2_test_def(), interquartile_range_def()
+      , robust_median_statistic_def(), peak_to_peak_variability_def()
+      , welch_stetson_I_def(), welch_stetson_J_def(), welch_stetson_K_def()
+      , residual_bright_faint_ratio_def(), cumulative_sum_range_def()
+      , von_neumann_eta_def(), above_1std_def()
     ]
 
     for f in internal_features:
@@ -1171,6 +1176,13 @@ def root_mean_square(xs):
     rms = math.sqrt((len(xs) ** -1) * sum_squares)
     return rms
 
+def chi_2_test_def():
+    name = "chi_2"
+    dependencies = ["magnitudes", "errors"]
+    function = chi_2_test
+
+    return Feature(name, dependencies, function)
+
 def chi_2_test(magnitudes, errors):
     """
     Returns the result of performing a chi^2 test.
@@ -1202,6 +1214,13 @@ def chi_2_test(magnitudes, errors):
     chi_2 = np.sum(np.divide(np.square(magnitudes - m_bar), errors_sq))
     return chi_2
 
+def interquartile_range_def():
+    name = "iqr"
+    dependencies = ["magnitudes"]
+    function = interquartile_range
+
+    return Feature(name, dependencies, function)
+
 def interquartile_range(magnitudes):
     """
     Returns the interquartile range of the magnitudes.
@@ -1227,6 +1246,13 @@ def interquartile_range(magnitudes):
     q3 = magnitudes[num_obs - per_25]
 
     return (q3 - q1)[0]
+
+def robust_median_statistic_def():
+    name = "roms"
+    dependencies = ["magnitudes", "errors"]
+    function = robust_median_statistic
+
+    return Feature(name, dependencies, function)
 
 def robust_median_statistic(magnitudes, errors):
     """
@@ -1257,6 +1283,13 @@ def robust_median_statistic(magnitudes, errors):
 
     return roms
 
+def peak_to_peak_variability_def():
+    name = "ptpv"
+    dependencies = ["magnitudes", "errors"]
+    function = peak_to_peak_variability
+
+    return Feature(name, dependencies, function)
+
 def peak_to_peak_variability(magnitudes, errors):
     """
     Returns the peak to peak variability of the given magnitudes and errors.
@@ -1285,6 +1318,13 @@ def peak_to_peak_variability(magnitudes, errors):
 
     ptpv = (max_diff - min_sum) / (max_diff + min_sum)
     return ptpv
+
+def welch_stetson_I_def():
+    name = "stetson_I"
+    dependencies = ["magnitudes", "errors"]
+    function = welch_stetson_I
+
+    return Feature(name, dependencies, function)
 
 def welch_stetson_I(magnitudes, errors):
     """
@@ -1328,6 +1368,13 @@ def welch_stetson_I(magnitudes, errors):
 
     return stetson_I
 
+def welch_stetson_J_def():
+    name = "stetson_J"
+    dependencies = ["magnitudes", "errors"]
+    function = welch_stetson_J
+
+    return Feature(name, dependencies, function)
+
 def welch_stetson_J(magnitudes, errors):
     w = 1.0 / errors
 
@@ -1338,6 +1385,13 @@ def welch_stetson_J(magnitudes, errors):
     stetson_J = np.sum(w * np.sign(p_k) * np.sqrt(np.absolute(p_k))) / np.sum(w)
 
     return stetson_J
+
+def welch_stetson_K_def():
+    name = "stetson_K"
+    dependencies = ["magnitudes", "errors"]
+    function = welch_stetson_K
+
+    return Feature(name, dependencies, function)
 
 def welch_stetson_K(magnitudes, errors):
     num_obs = magnitudes.shape[0]
@@ -1549,6 +1603,13 @@ def fourier_phi_1(coef, n):
 def fourier_phi(coef, n):
     return coef[2 * (n - 1) + 2]
 
+def residual_bright_faint_ratio_def():
+    name = "residual_br_fa_ratio"
+    dependencies = ["magnitudes"]
+    function = residual_bright_faint_ratio
+
+    return Feature(name, dependencies, function)
+
 def residual_bright_faint_ratio(magnitudes):
     """
     Returns the ratio of the average squared variations from the mean of the
@@ -1578,6 +1639,13 @@ def residual_bright_faint_ratio(magnitudes):
 
     return ratio
 
+def cumulative_sum_range_def():
+    name = "cum_sum"
+    dependencies = ["magnitudes"]
+    function = cumulative_sum_range
+
+    return Feature(name, dependencies, function)
+
 def cumulative_sum_range(magnitudes):
     """
     Returns the range of the cumulative sum of the given magnitudes.
@@ -1599,6 +1667,13 @@ def cumulative_sum_range(magnitudes):
     cum_sum_range = np.max(cum_sums) - np.min(cum_sums)
 
     return cum_sum_range
+
+def von_neumann_eta_def():
+    name = "neumann_eta"
+    dependencies = ["magnitudes"]
+    function = von_neumann_eta
+
+    return Feature(name, dependencies, function)
 
 def von_neumann_eta(magnitudes):
     """
@@ -1665,6 +1740,13 @@ def mean_crosses(magnitudes):
     crosses = are_crosses[are_crosses < 0.0].size
 
     return crosses
+
+def above_1std_def():
+    name = "abv_1std"
+    dependencies = ["magnitudes"]
+    function = above_1std
+
+    return Feature(name, dependencies, function)
 
 def above_1std(magnitudes):
     """
