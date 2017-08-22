@@ -48,7 +48,7 @@ class TestClassifier(unittest.TestCase):
     def test_train(self):
         model = classifier.LICUBIC()
 
-        model.train(TEST_CURVES, TEST_LABELS)
+        model.fit(TEST_CURVES, TEST_LABELS)
 
         expected = True
         actual = model.trained
@@ -57,7 +57,7 @@ class TestClassifier(unittest.TestCase):
     def test_train_predict(self):
         model = classifier.LICUBIC()
 
-        model.train(TEST_CURVES, TEST_LABELS)
+        model.fit(TEST_CURVES, TEST_LABELS)
 
         y = model.predict(TEST_CURVES)
 
@@ -66,7 +66,7 @@ class TestClassifier(unittest.TestCase):
     def test_train_predictable(self):
         model = classifier.LICUBIC()
 
-        model.train(TEST_CURVES_PREDICTABLE, TEST_LABELS_PREDICTABLE)
+        model.fit(TEST_CURVES_PREDICTABLE, TEST_LABELS_PREDICTABLE)
 
         y_pred = model.predict(TEST_CURVES_PREDICTABLE)
 

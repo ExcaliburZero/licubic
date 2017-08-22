@@ -14,7 +14,7 @@ def feature_matrix(X, y, feature_names, balanced=False):
 
     combinations = list(itertools.combinations_with_replacement(categories, 2))
 
-    parallel = False
+    parallel = True
     if parallel:
         calculations = []
         for (a, b) in combinations:
@@ -236,6 +236,11 @@ def score(model, X, y):
 def normalized_matthews_correlation(y, y_pred):
     num_a = y[y == 0].size
     num_b = y[y == 1].size
+
+    if num_a == 0:
+        raise ValueError("No actual positive cases given.")
+    if num_b == 0:
+        raise ValueError("No actual negative cases given.")
 
     values = get_table_values(y, y_pred)
 

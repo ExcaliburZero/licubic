@@ -155,7 +155,7 @@ class LICUBIC(object):
 
         self.feature_extractor_train = feature_extraction.FeatureExtractor(features=features)
 
-    def train(self, X, y):
+    def fit(self, X, y):
         y = np.array(y)
 
         self.trained = True
