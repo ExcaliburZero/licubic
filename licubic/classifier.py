@@ -47,7 +47,7 @@ class LICUBIC(object):
         self.trained = True
 
         if self.unknown in y:
-            raise Exception("There cannot be a category named %s as this name is reserved." % self.unknown)
+            raise ValueError("There cannot be a category named %s as this name is reserved." % self.unknown)
 
         X_feat = self.feature_extractor_train.transform(X)
         external_features = self.feature_extractor_train.get_external_features()
@@ -82,6 +82,9 @@ class LICUBIC(object):
         return np.array(predictions)
 
     def get_class_probabilities(self, X):
+        if not self.trained:
+            raise RuntimeError("This classifier has not yet been fit.")
+
         X_features = self.feature_extractor_predict.transform(X)
 
         ordered_sel_features = list(self.feature_extractor_predict.get_external_features())
@@ -132,6 +135,9 @@ class LICUBIC(object):
         plt.savefig(save_file_path)
 
     def write_feature_matrix(self, save_file_path):
+        if not self.trained:
+            raise RuntimeError("This classifier has not yet been fit.")
+
         write_html_matrix(self.matrix, self.categories, save_file_path)
 
 
