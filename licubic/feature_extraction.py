@@ -4,7 +4,7 @@ from os import path
 from scipy.interpolate import interp1d
 from scipy.optimize import leastsq
 from scipy.signal import savgol_filter
-from sklearn import linear_model
+from sklearn import linear_model, gaussian_process
 
 import collections
 import itertools
@@ -147,7 +147,8 @@ def get_default_features():
 
     internal_features = [
         times_def(), magnitudes_def(), errors_def(), fluxes_def()
-      , light_curve_rms_def()
+      , light_curve_rms_def(), gaussian_process_regression_def()
+      , gauss_times_def(), gauss_magnitudes_def()
     ]
 
     external_features = [
@@ -163,7 +164,8 @@ def get_default_features():
       , robust_median_statistic_def(), peak_to_peak_variability_def()
       , welch_stetson_I_def(), welch_stetson_J_def(), welch_stetson_K_def()
       , residual_bright_faint_ratio_def(), cumulative_sum_range_def()
-      , von_neumann_eta_def(), above_1std_def()
+      , von_neumann_eta_def(), above_1std_def(), total_variation_def()
+      , quadratic_variation_def()
     ]
 
     for f in internal_features:
@@ -545,6 +547,47 @@ def magnitudes_to_fluxes(magnitudes):
     fluxes = 10.0 ** (-0.4 * magnitudes)
 
     return fluxes
+
+def gaussian_process_regression_def():
+    name = "gaussian_process_regression"
+    dependencies = ["times", "magnitudes"]
+    function = gaussian_process_regression
+
+    return Feature(name, dependencies, function)
+
+def gauss_times_def():
+    name = "gauss_times"
+    dependencies = ["gaussian_process_regression"]
+    function = lambda x: x[0]
+
+    return Feature(name, dependencies, function)
+
+def gauss_magnitudes_def():
+    name = "gauss_magnitudes"
+    dependencies = ["gaussian_process_regression"]
+    function = lambda x: x[1]
+
+    return Feature(name, dependencies, function)
+
+def gaussian_process_regression(times, magnitudes):
+    gauss = gaussian_process.GaussianProcessRegressor(alpha=1)
+    gauss.fit(times, magnitudes)
+
+    prior_mean = np.median(magnitudes)
+
+    min_time = np.min(times)
+    max_time = np.max(times)
+    interval = (max_time - min_time) / 100.0
+
+    gauss_times = np.arange(min_time, max_time, interval)
+    gauss_times_X = np.expand_dims(gauss_times, 1)
+
+    gauss_mags = gauss.sample_y(gauss_times_X) + prior_mean
+
+    gauss_times = np.expand_dims(gauss_times, 1)
+    gauss_mags = gauss_mags[:,:,0]
+
+    return np.vstack([gauss_times, gauss_mags])
 
 def amplitude_def():
     name = "ampl"
@@ -944,6 +987,13 @@ def flux_percentile(fluxes, n, m):
 def flux_percentage_ratio(fluxes, a, b, c, d):
     return flux_percentile(fluxes, a, b) / flux_percentile(fluxes, c, d)
 
+def total_variation_def():
+    name = "totvar"
+    dependencies = ["gauss_magnitudes"]
+    function = total_variation
+
+    return Feature(name, dependencies, function)
+
 def total_variation(magnitudes):
     """
     Returns the average of absolute differences between neighboring magnitudes.
@@ -972,6 +1022,13 @@ def total_variation(magnitudes):
     abs_diffs = np.absolute(mags_m_plus_1 - mags_m)
 
     return np.sum(abs_diffs) / m
+
+def quadratic_variation_def():
+    name = "quadvar"
+    dependencies = ["gauss_magnitudes"]
+    function = quadratic_variation
+
+    return Feature(name, dependencies, function)
 
 def quadratic_variation(magnitudes):
     """
