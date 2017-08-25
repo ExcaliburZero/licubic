@@ -20,12 +20,12 @@ def load_curves_from_file(curves_file):
     curves = pd.read_csv(curves_file)
     curves.columns = ["id", "time", "mag", "magerr", "ra", "dec"]
 
-    mid = time.time()
-
     ids = np.array(curves["id"].unique())
 
+    groups = curves.groupby(by="id")
+
     columns = ["time", "mag", "magerr"]
-    curves_list = [curves[curves["id"] == i].as_matrix(columns) for i in ids]
+    curves_list = [groups.get_group(i).as_matrix(columns) for i in ids]
 
     return ids, curves_list
 
